@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block header %}
+<div class="app-header">
+    <h1>NVDBchat</h1>
+    <div>
+        <span style="color:#8696a0; margin-right:15px;">{{ session.username }}</span>
+        <a href="{{ url_for('profile') }}">Профиль</a>
+        <a href="{{ url_for('logout') }}">Выйти</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="chats-layout">
+    <!-- Левая панель со списком чатов -->
+    <div class="chats-sidebar">
+        <div class="chats-header">
+            <h2>Чаты</h2>
+            <a href="{{ url_for('create_group') }}" class="new-chat-btn">+</a>
+        </div>
+        
+        <div class="search-box">
+            <form method="POST" action="{{ url_for('search_user') }}">
+                <input type="text" name="username" placeholder="Поиск по @username..." required>
+            </form>
+        </div>
+        
+        <div class="chats-list">
+            {% for chat in chats %}
+            <a href="{{ url_for('chat', chat_id=chat.id) }}" class="chat-item">
+                <div class="chat-avatar">
+                    {% if chat.type == 'group' %}
+                        👥
+                    {% else %}
+                        👤
+                    {% endif %}
+                </div>
+                <div class="chat-info">
+                    <div class="chat-name">{{ chat.display_name }}</div>
+                    <div class="chat-last-msg">
+                        {% if chat.last_message %}
+                            {{ chat.last_message.content[:30] }}{% if chat.last_message.content|length > 30 %}...{% endif %}
+                        {% else %}
+                            Нет сообщений
+                        {% endif %}
+                    </div>
+                </div>
+            </a>
+            {% else %}
+            <div style="padding: 20px; text-align: center; color: #8696a0;">
+                У вас пока нет чатов. Начните поиск!
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <!-- Правая панель (пустая, если чат не выбран) -->
+    <div class="chat-area" style="display: flex; align-items: center; justify-content: center; color: #8696a0;">
+        <div style="text-align: center;">
+            <div style="font-size: 3rem; margin-bottom: 20px;">💬</div>
+            <h2>Выберите чат</h2>
+            <p>Нажмите на чат слева, чтобы начать общение</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

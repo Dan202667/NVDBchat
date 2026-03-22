@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="auth-container">
+    <h2>Завершите создание профиля</h2>
+    <p>Придумайте уникальный @username (только латинские буквы, цифры и подчёркивание).</p>
+    <form method="POST" action="{{ url_for('create_profile') }}">
+        <div class="form-group">
+            <input type="text" name="username" placeholder="@username (без @)" required pattern="[A-Za-z0-9_]+" title="Только латинские буквы, цифры и подчёркивание">
+        </div>
+        <button type="submit" class="btn">Сохранить</button>
+    </form>
+</div>
+{% endblock %}

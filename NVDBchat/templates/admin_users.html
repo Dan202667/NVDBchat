@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="padding: 30px;">
+    <h2 style="color: #00a884; margin-bottom: 20px;">Админ-панель: пользователи</h2>
+    
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Имя</th>
+                <th>@username</th>
+                <th>Дата регистрации</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr>
+                <td>{{ user.id }}</td>
+                <td>{{ user.name }}</td>
+                <td>@{{ user.username }}</td>
+                <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <a href="{{ url_for('chats') }}" class="btn" style="width: auto; margin-top: 20px;">Назад к чатам</a>
+</div>
+{% endblock %}

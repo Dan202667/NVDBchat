@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block header %}
+<div class="app-header">
+    <h1>NVDBchat</h1>
+    <div>
+        <span style="color:#8696a0; margin-right:15px;">{{ session.username }}</span>
+        <a href="{{ url_for('chats') }}">К чатам</a>
+        <a href="{{ url_for('profile') }}">Профиль</a>
+        <a href="{{ url_for('logout') }}">Выйти</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="chats-layout">
+    <div class="chats-sidebar">
+        <div class="chats-header">
+            <h2>Чаты</h2>
+            <a href="{{ url_for('create_group') }}" class="new-chat-btn">+</a>
+        </div>
+        <div class="search-box">
+            <form method="POST" action="{{ url_for('search_user') }}">
+                <input type="text" name="username" placeholder="Поиск по @username..." required>
+            </form>
+        </div>
+        <div class="chats-list">
+            {% for c in all_chats %}
+            <a href="{{ url_for('chat', chat_id=c.id) }}" class="chat-item {% if c.id == chat_id %}active{% endif %}" style="{% if c.id == chat_id %}background: #202c33;{% endif %}">
+                <div class="chat-avatar">
+                    {% if c.type == 'group' %}👥{% else %}👤{% endif %}
+                </div>
+                <div class="chat-info">
+                    <div class="chat-name">{{ c.display_name }}</div>
+                    <div class="chat-last-msg">
+                        {% if c.last_message %}
+                            {{ c.last_message.content[:30] if c.last_message.content else '' }}
+                        {% else %}
+                            Нет сообщений
+                        {% endif %}
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="chat-area">
+        <div class="chat-header">
+            <div class="chat-avatar" style="width: 40px; height: 40px;">
+                {% if chat.type == 'group' %}👥{% else %}👤{% endif %}
+            </div>
+            <div class="chat-header-info">
+                <div class="chat-header-name">{{ chat_name }}</div>
+                <div class="chat-header-status">
+                    {% if chat.type == 'group' %}Групповой чат{% else %}Личный чат{% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="messages-container" id="messages">
+            {% for msg in messages %}
+            <div class="message-wrapper {% if msg.sender_id == session.user_id %}my-message{% else %}other-message{% endif %}" id="msg-{{ msg.id }}">
+                <div class="message-bubble">
+                    {% if msg.sender_id != session.user_id and chat.type == 'group' %}
+                    <div class="message-sender">{{ msg.sender_name }}</div>
+                    {% endif %}
+                    <div>{{ msg.content }}</div>
+                    <div class="message-time">{{ msg.timestamp.strftime('%H:%M') }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <form class="message-form" id="messageForm">
+            <input type="text" name="content" placeholder="Введите сообщение..." autocomplete="off" id="messageInput">
+            <button type="submit">Отправить</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    var chatId = {{ chat_id }};
+    var currentUserId = {{ session.user_id }};
+    var lastMessageId = {{ messages[-1].id if messages else 0 }};
+    var messagesDiv = document.getElementById('messages');
+
+    function appendMessage(msg) {
+        var msgDiv = document.createElement('div');
+        msgDiv.className = 'message-wrapper ' + (msg.sender_id == currentUserId ? 'my-message' : 'other-message');
+        msgDiv.id = 'msg-' + msg.id;
+        var bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+        if (msg.sender_id != currentUserId && {{ 'true' if chat.type == 'group' else 'false' }}) {
+            var senderDiv = document.createElement('div');
+            senderDiv.className = 'message-sender';
+            senderDiv.textContent = msg.sender_name;
+            bubble.appendChild(senderDiv);
+        }
+        var contentDiv = document.createElement('div');
+        contentDiv.textContent = msg.content;
+        bubble.appendChild(contentDiv);
+        var timeDiv = document.createElement('div');
+        timeDiv.className = 'message-time';
+        timeDiv.textContent = msg.timestamp;
+        bubble.appendChild(timeDiv);
+        msgDiv.appendChild(bubble);
+        messagesDiv.appendChild(msgDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    document.getElementById('messageForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var formData = new FormData(this);
+        fetch('/send_message/' + chatId, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+            appendMessage(data);
+            lastMessageId = data.id;
+            document.getElementById('messageInput').value = '';
+        })
+        .catch(err => console.error('Error:', err));
+    });
+
+    function pollNewMessages() {
+        fetch('/get_new_messages/' + chatId + '?last_id=' + lastMessageId)
+        .then(response => response.json())
+        .then(messages => {
+            messages.forEach(msg => {
+                appendMessage(msg);
+                lastMessageId = msg.id;
+            });
+        })
+        .catch(err => console.error('Poll error:', err));
+    }
+
+    setInterval(pollNewMessages, 3000);
+</script>
+{% endblock %}
