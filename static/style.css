@@ -416,3 +416,58 @@ a {
 a:hover {
     text-decoration: underline;
 }
+
+/* Адаптация под мобильные устройства */
+@media (max-width: 768px) {
+    .chats-layout {
+        flex-direction: column;
+    }
+    
+    .chats-sidebar {
+        width: 100%;
+        height: auto;
+        max-height: 40vh;
+        border-right: none;
+        border-bottom: 1px solid #2a3942;
+    }
+    
+    .chat-area {
+        height: 60vh;
+    }
+    
+    .chat-header {
+        padding: 10px 15px;
+    }
+    
+    .message-bubble {
+        max-width: 85%;
+    }
+    
+    .message-form {
+        padding: 10px 15px;
+    }
+    
+    .message-form input {
+        font-size: 16px;
+    }
+    
+    .welcome-container h1 {
+        font-size: 1.8rem;
+    }
+    
+    .welcome-buttons {
+        flex-direction: column;
+        gap: 15px;
+        width: 80%;
+    }
+    
+    .btn-large {
+        padding: 15px 30px;
+        font-size: 1.2rem;
+    }
+    
+    .auth-container {
+        margin: 20px;
+        padding: 20px;
+    }
+}
