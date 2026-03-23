@@ -12,7 +12,7 @@ app.config['SECRET_KEY'] = 'your-secret-key-change-in-production'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Настройка Cloudinary (вставь свои ключи)
+# Настройка Cloudinary (твои ключи)
 cloudinary.config(
     cloud_name='dhkol0drf',
     api_key='816413685482328',
