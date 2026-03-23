@@ -13,27 +13,38 @@
 
 {% block content %}
 <div class="chats-layout">
+    <!-- Левая панель со списком чатов -->
     <div class="chats-sidebar">
         <div class="chats-header">
             <h2>Чаты</h2>
             <a href="{{ url_for('create_group') }}" class="new-chat-btn">+</a>
         </div>
+        
         <div class="search-box">
             <form method="POST" action="{{ url_for('search_user') }}">
                 <input type="text" name="username" placeholder="Поиск по @username..." required>
             </form>
         </div>
+        
         <div class="chats-list">
             {% for c in all_chats %}
             <a href="{{ url_for('chat', chat_id=c.id) }}" class="chat-item {% if c.id == chat_id %}active{% endif %}" style="{% if c.id == chat_id %}background: #202c33;{% endif %}">
                 <div class="chat-avatar">
-                    {% if c.type == 'group' %}👥{% else %}👤{% endif %}
+                    {% if c.type == 'group' %}
+                        👥
+                    {% else %}
+                        {% if c.other_avatar %}
+                            <img src="{{ c.other_avatar }}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
+                        {% else %}
+                            👤
+                        {% endif %}
+                    {% endif %}
                 </div>
                 <div class="chat-info">
                     <div class="chat-name">{{ c.display_name }}</div>
                     <div class="chat-last-msg">
                         {% if c.last_message %}
-                            {{ c.last_message.content[:30] if c.last_message.content else '' }}
+                            {{ c.last_message.content[:30] if c.last_message.content else 'Файл' }}
                         {% else %}
                             Нет сообщений
                         {% endif %}
@@ -43,6 +54,8 @@
             {% endfor %}
         </div>
     </div>
+    
+    <!-- Правая панель с сообщениями -->
     <div class="chat-area">
         <div class="chat-header">
             <div class="chat-avatar" style="width: 40px; height: 40px;">
@@ -51,10 +64,15 @@
             <div class="chat-header-info">
                 <div class="chat-header-name">{{ chat_name }}</div>
                 <div class="chat-header-status">
-                    {% if chat.type == 'group' %}Групповой чат{% else %}Личный чат{% endif %}
+                    {% if chat.type == 'group' %}
+                        Групповой чат
+                    {% else %}
+                        Личный чат
+                    {% endif %}
                 </div>
             </div>
         </div>
+        
         <div class="messages-container" id="messages">
             {% for msg in messages %}
             <div class="message-wrapper {% if msg.sender_id == session.user_id %}my-message{% else %}other-message{% endif %}" id="msg-{{ msg.id }}">
@@ -62,14 +80,29 @@
                     {% if msg.sender_id != session.user_id and chat.type == 'group' %}
                     <div class="message-sender">{{ msg.sender_name }}</div>
                     {% endif %}
-                    <div>{{ msg.content }}</div>
+                    
+                    {% if msg.file_type == 'image' %}
+                        <img src="{{ msg.file_url }}" 
+                             style="max-width: 200px; border-radius: 8px; cursor: pointer;" 
+                             onclick="window.open(this.src, '_blank')">
+                    {% elif msg.file_type == 'video' %}
+                        <video controls style="max-width: 200px; border-radius: 8px;">
+                            <source src="{{ msg.file_url }}">
+                        </video>
+                    {% else %}
+                        <div>{{ msg.content }}</div>
+                    {% endif %}
+                    
                     <div class="message-time">{{ msg.timestamp.strftime('%H:%M') }}</div>
                 </div>
             </div>
             {% endfor %}
         </div>
-        <form class="message-form" id="messageForm">
+        
+        <form class="message-form" id="messageForm" enctype="multipart/form-data">
             <input type="text" name="content" placeholder="Введите сообщение..." autocomplete="off" id="messageInput">
+            <input type="file" name="file" accept="image/*,video/*" style="display: none;" id="fileInput">
+            <button type="button" onclick="document.getElementById('fileInput').click();" style="background: #3b4a54; padding: 12px;">📎</button>
             <button type="submit">Отправить</button>
         </form>
     </div>
@@ -85,21 +118,45 @@
         var msgDiv = document.createElement('div');
         msgDiv.className = 'message-wrapper ' + (msg.sender_id == currentUserId ? 'my-message' : 'other-message');
         msgDiv.id = 'msg-' + msg.id;
+
         var bubble = document.createElement('div');
         bubble.className = 'message-bubble';
+
         if (msg.sender_id != currentUserId && {{ 'true' if chat.type == 'group' else 'false' }}) {
             var senderDiv = document.createElement('div');
             senderDiv.className = 'message-sender';
             senderDiv.textContent = msg.sender_name;
             bubble.appendChild(senderDiv);
         }
-        var contentDiv = document.createElement('div');
-        contentDiv.textContent = msg.content;
-        bubble.appendChild(contentDiv);
+
+        if (msg.file_type === 'image') {
+            var img = document.createElement('img');
+            img.src = msg.file_url;
+            img.style.maxWidth = '200px';
+            img.style.borderRadius = '8px';
+            img.style.cursor = 'pointer';
+            img.onclick = function() { window.open(this.src, '_blank'); };
+            bubble.appendChild(img);
+        } else if (msg.file_type === 'video') {
+            var video = document.createElement('video');
+            video.controls = true;
+            video.style.maxWidth = '200px';
+            video.style.borderRadius = '8px';
+            var source = document.createElement('source');
+            source.src = msg.file_url;
+            video.appendChild(source);
+            bubble.appendChild(video);
+        } else {
+            var contentDiv = document.createElement('div');
+            contentDiv.textContent = msg.content;
+            bubble.appendChild(contentDiv);
+        }
+
         var timeDiv = document.createElement('div');
         timeDiv.className = 'message-time';
         timeDiv.textContent = msg.timestamp;
         bubble.appendChild(timeDiv);
+
         msgDiv.appendChild(bubble);
         messagesDiv.appendChild(msgDiv);
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -121,6 +178,7 @@
             appendMessage(data);
             lastMessageId = data.id;
             document.getElementById('messageInput').value = '';
+            document.getElementById('fileInput').value = '';
         })
         .catch(err => console.error('Error:', err));
     });

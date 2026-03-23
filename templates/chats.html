@@ -12,19 +12,16 @@
 
 {% block content %}
 <div class="chats-layout">
-    <!-- Левая панель со списком чатов -->
     <div class="chats-sidebar">
         <div class="chats-header">
             <h2>Чаты</h2>
             <a href="{{ url_for('create_group') }}" class="new-chat-btn">+</a>
         </div>
-        
         <div class="search-box">
             <form method="POST" action="{{ url_for('search_user') }}">
                 <input type="text" name="username" placeholder="Поиск по @username..." required>
             </form>
         </div>
-        
         <div class="chats-list">
             {% for chat in chats %}
             <a href="{{ url_for('chat', chat_id=chat.id) }}" class="chat-item">
@@ -33,7 +30,7 @@
                         👥
                     {% else %}
                         {% if chat.other_avatar %}
-                            <img src="{{ url_for('static', filename=chat.other_avatar.replace('static/', '')) }}">
+                            <img src="{{ chat.other_avatar }}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
                         {% else %}
                             👤
                         {% endif %}
@@ -43,7 +40,7 @@
                     <div class="chat-name">{{ chat.display_name }}</div>
                     <div class="chat-last-msg">
                         {% if chat.last_message %}
-                            {{ chat.last_message.content[:30] if chat.last_message.content else 'Файл' }}{% if chat.last_message.content and chat.last_message.content|length > 30 %}...{% endif %}
+                            {{ chat.last_message.content[:30] if chat.last_message.content else 'Файл' }}
                         {% else %}
                             Нет сообщений
                         {% endif %}
@@ -57,8 +54,6 @@
             {% endfor %}
         </div>
     </div>
-    
-    <!-- Правая панель (пустая, если чат не выбран) -->
     <div class="chat-area" style="display: flex; align-items: center; justify-content: center; color: #8696a0;">
         <div style="text-align: center;">
             <div style="font-size: 3rem; margin-bottom: 20px;">💬</div>

@@ -1,6 +1,8 @@
 import os
+import uuid
 from datetime import datetime
-
+import cloudinary
+import cloudinary.uploader
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -9,6 +11,13 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-change-in-production'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Настройка Cloudinary (вставь свои ключи)
+cloudinary.config(
+    cloud_name='dhkol0drf',
+    api_key='816413685482328',
+    api_secret='xf42h1mQQKprlwl0dujXHUpX7Ow'
+)
 
 db = SQLAlchemy(app)
 
@@ -19,6 +28,7 @@ class User(db.Model):
     name = db.Column(db.String(100), nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     username = db.Column(db.String(50), unique=True, nullable=True)
+    avatar_url = db.Column(db.String(300), nullable=True)  # ссылка на аватар в Cloudinary
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def set_password(self, password):
@@ -46,11 +56,31 @@ class Message(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     chat_id = db.Column(db.Integer, db.ForeignKey('chats.id'))
     sender_id = db.Column(db.Integer, db.ForeignKey('users.id'))
-    content = db.Column(db.Text, nullable=False)
+    content = db.Column(db.Text, nullable=True)          # текст сообщения (может быть пустым)
+    file_url = db.Column(db.String(300), nullable=True)  # ссылка на файл в Cloudinary
+    file_type = db.Column(db.String(20), nullable=True)  # 'image', 'video', 'text'
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+def upload_to_cloudinary(file, folder='nvdbchat'):
+    """Загружает файл в Cloudinary и возвращает URL и тип"""
+    if not file:
+        return None, None
+    try:
+        upload_result = cloudinary.uploader.upload(
+            file,
+            folder=folder,
+            resource_type='auto'  # автоопределение: image или video
+        )
+        file_url = upload_result.get('secure_url')
+        file_type = upload_result.get('resource_type')  # 'image' или 'video'
+        return file_url, file_type
+    except Exception as e:
+        print(f"Ошибка загрузки в Cloudinary: {e}")
+        return None, None
+
 def get_user_chats(user_id):
+    """Возвращает список чатов пользователя с дополнительными полями"""
     participations = ChatParticipant.query.filter_by(user_id=user_id).all()
     chat_ids = [p.chat_id for p in participations]
     chats = Chat.query.filter(Chat.id.in_(chat_ids)).all()
@@ -65,10 +95,14 @@ def get_user_chats(user_id):
             if other:
                 other_user = User.query.get(other.user_id)
                 display_name = other_user.username or other_user.name
+                other_avatar = other_user.avatar_url
             else:
                 display_name = 'Личный чат'
+                other_avatar = None
+            setattr(chat, 'other_avatar', other_avatar)
         else:
             display_name = chat.name or 'Группа без названия'
+            setattr(chat, 'other_avatar', None)
 
         last_msg = Message.query.filter_by(chat_id=chat.id).order_by(Message.timestamp.desc()).first()
         setattr(chat, 'display_name', display_name)
@@ -122,6 +156,15 @@ def create_profile():
             return render_template('create_profile.html')
         user = User.query.get(session['temp_user_id'])
         user.username = username
+
+        # Загрузка аватарки в Cloudinary
+        if 'avatar' in request.files:
+            file = request.files['avatar']
+            if file.filename:
+                avatar_url, _ = upload_to_cloudinary(file, folder='nvdbchat/avatars')
+                if avatar_url:
+                    user.avatar_url = avatar_url
+
         db.session.commit()
         session['user_id'] = user.id
         session['username'] = user.username
@@ -135,6 +178,21 @@ def profile():
         return redirect(url_for('index'))
     user = User.query.get(session['user_id'])
     return render_template('profile.html', user=user)
+
+@app.route('/upload_avatar', methods=['POST'])
+def upload_avatar():
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+    user = User.query.get(session['user_id'])
+    if 'avatar' in request.files:
+        file = request.files['avatar']
+        if file.filename:
+            avatar_url, _ = upload_to_cloudinary(file, folder='nvdbchat/avatars')
+            if avatar_url:
+                user.avatar_url = avatar_url
+                db.session.commit()
+                flash('Аватар обновлён')
+    return redirect(url_for('profile'))
 
 @app.route('/logout')
 def logout():
@@ -204,6 +262,7 @@ def chat(chat_id):
     for msg in messages:
         sender = User.query.get(msg.sender_id)
         msg.sender_name = sender.username or sender.name
+        msg.sender_avatar = sender.avatar_url
 
     if chat_obj.type == 'private':
         other = ChatParticipant.query.filter(
@@ -235,18 +294,43 @@ def send_message(chat_id):
         return jsonify({'error': 'Not logged in'}), 403
 
     content = request.form.get('content', '')
+    file = request.files.get('file')
+    msg = Message(chat_id=chat_id, sender_id=session['user_id'])
+
+    if file and file.filename:
+        file_url, file_type = upload_to_cloudinary(file, folder='nvdbchat/uploads')
+        if file_url:
+            msg.file_url = file_url
+            msg.file_type = file_type
+            msg.content = content if content else None
+            db.session.add(msg)
+            db.session.commit()
+            sender = User.query.get(msg.sender_id)
+            return jsonify({
+                'id': msg.id,
+                'content': msg.content,
+                'file_url': msg.file_url,
+                'file_type': msg.file_type,
+                'sender_id': msg.sender_id,
+                'sender_name': sender.username or sender.name,
+                'timestamp': msg.timestamp.strftime('%H:%M')
+            }), 200
+
     if content.strip():
-        msg = Message(chat_id=chat_id, sender_id=session['user_id'], content=content)
+        msg.content = content
+        msg.file_type = 'text'
         db.session.add(msg)
         db.session.commit()
         sender = User.query.get(msg.sender_id)
         return jsonify({
             'id': msg.id,
             'content': msg.content,
+            'file_type': 'text',
             'sender_id': msg.sender_id,
             'sender_name': sender.username or sender.name,
             'timestamp': msg.timestamp.strftime('%H:%M')
         }), 200
+
     return jsonify({'error': 'Empty message'}), 400
 
 @app.route('/get_new_messages/<int:chat_id>')
@@ -265,6 +349,8 @@ def get_new_messages(chat_id):
         result.append({
             'id': msg.id,
             'content': msg.content,
+            'file_url': msg.file_url,
+            'file_type': msg.file_type,
             'sender_id': msg.sender_id,
             'sender_name': sender.username or sender.name,
             'timestamp': msg.timestamp.strftime('%H:%M')
