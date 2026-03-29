@@ -397,3 +397,8 @@ def admin_users():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
+@app.route('/reset_db')
+def reset_db():
+    db.drop_all()
+    db.create_all()
+    return "База данных пересоздана. Теперь удали этот маршрут."
