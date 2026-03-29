@@ -5,21 +5,25 @@ import cloudinary
 import cloudinary.uploader
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-change-in-production'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
+
+# Настройка базы данных (PostgreSQL на сервере, SQLite на компьютере)
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Настройка Cloudinary (твои ключи)
+# Настройка Cloudinary
 cloudinary.config(
-    cloud_name='dhkol0drf',
-    api_key='816413685482328',
-    api_secret='xf42h1mQQKprlwl0dujXHUpX7Ow'
+    cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME', 'dhkol0drf'),
+    api_key=os.environ.get('CLOUDINARY_API_KEY', '816413685482328'),
+    api_secret=os.environ.get('CLOUDINARY_API_SECRET', 'xf42h1mQQKprlwl0dujXHUpX7Ow')
 )
 
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 
 # ==================== МОДЕЛИ ====================
 class User(db.Model):
@@ -28,7 +32,7 @@ class User(db.Model):
     name = db.Column(db.String(100), nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     username = db.Column(db.String(50), unique=True, nullable=True)
-    avatar_url = db.Column(db.String(300), nullable=True)  # ссылка на аватар в Cloudinary
+    avatar_url = db.Column(db.String(300), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def set_password(self, password):
@@ -40,7 +44,7 @@ class User(db.Model):
 class Chat(db.Model):
     __tablename__ = 'chats'
     id = db.Column(db.Integer, primary_key=True)
-    type = db.Column(db.String(10))   # 'private' или 'group'
+    type = db.Column(db.String(10))
     name = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -56,31 +60,29 @@ class Message(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     chat_id = db.Column(db.Integer, db.ForeignKey('chats.id'))
     sender_id = db.Column(db.Integer, db.ForeignKey('users.id'))
-    content = db.Column(db.Text, nullable=True)          # текст сообщения (может быть пустым)
-    file_url = db.Column(db.String(300), nullable=True)  # ссылка на файл в Cloudinary
-    file_type = db.Column(db.String(20), nullable=True)  # 'image', 'video', 'text'
+    content = db.Column(db.Text, nullable=True)
+    file_url = db.Column(db.String(300), nullable=True)
+    file_type = db.Column(db.String(20), nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def upload_to_cloudinary(file, folder='nvdbchat'):
-    """Загружает файл в Cloudinary и возвращает URL и тип"""
     if not file:
         return None, None
     try:
         upload_result = cloudinary.uploader.upload(
             file,
             folder=folder,
-            resource_type='auto'  # автоопределение: image или video
+            resource_type='auto'
         )
         file_url = upload_result.get('secure_url')
-        file_type = upload_result.get('resource_type')  # 'image' или 'video'
+        file_type = upload_result.get('resource_type')
         return file_url, file_type
     except Exception as e:
         print(f"Ошибка загрузки в Cloudinary: {e}")
         return None, None
 
 def get_user_chats(user_id):
-    """Возвращает список чатов пользователя с дополнительными полями"""
     participations = ChatParticipant.query.filter_by(user_id=user_id).all()
     chat_ids = [p.chat_id for p in participations]
     chats = Chat.query.filter(Chat.id.in_(chat_ids)).all()
@@ -157,7 +159,6 @@ def create_profile():
         user = User.query.get(session['temp_user_id'])
         user.username = username
 
-        # Загрузка аватарки в Cloudinary
         if 'avatar' in request.files:
             file = request.files['avatar']
             if file.filename:
