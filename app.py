@@ -53,7 +53,7 @@ class ChatParticipant(db.Model):
     chat_id = db.Column(db.Integer, db.ForeignKey('chats.id'))
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     joined_at = db.Column(db.DateTime, default=datetime.utcnow)
-    last_read_message_id = db.Column(db.Integer, default=0)  # ID последнего прочитанного сообщения
+    last_read_message_id = db.Column(db.Integer, default=0)
 
 class Message(db.Model):
     __tablename__ = 'messages'
@@ -62,7 +62,7 @@ class Message(db.Model):
     sender_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     content = db.Column(db.Text, nullable=True)
     file_url = db.Column(db.String(300), nullable=True)
-    file_type = db.Column(db.String(20), nullable=True)  # 'image', 'video', 'audio', 'text'
+    file_type = db.Column(db.String(20), nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 # ==================== СОЗДАНИЕ ТАБЛИЦ ПРИ ЗАПУСКЕ ====================
@@ -94,14 +94,12 @@ def upload_to_cloudinary(file, folder='nvdbchat'):
         return None, None
 
 def get_user_chats(user_id):
-    """Возвращает список чатов пользователя с дополнительными полями"""
     participations = ChatParticipant.query.filter_by(user_id=user_id).all()
     chat_ids = [p.chat_id for p in participations]
     chats = Chat.query.filter(Chat.id.in_(chat_ids)).all()
 
     result = []
     for chat in chats:
-        # Получаем информацию об участнике (последнее прочитанное сообщение)
         user_participation = ChatParticipant.query.filter_by(chat_id=chat.id, user_id=user_id).first()
         last_read_id = user_participation.last_read_message_id if user_participation else 0
         
@@ -123,12 +121,10 @@ def get_user_chats(user_id):
             setattr(chat, 'other_avatar', None)
 
         last_msg = Message.query.filter_by(chat_id=chat.id).order_by(Message.timestamp.desc()).first()
-        
-        # Подсчёт непрочитанных сообщений (сообщения, ID которых больше last_read_id)
         unread_count = Message.query.filter(
             Message.chat_id == chat.id,
             Message.id > last_read_id,
-            Message.sender_id != user_id  # Не считаем свои сообщения
+            Message.sender_id != user_id
         ).count()
         
         setattr(chat, 'display_name', display_name)
@@ -140,7 +136,6 @@ def get_user_chats(user_id):
     return result
 
 def mark_chat_read(chat_id, user_id):
-    """Отмечает все сообщения в чате как прочитанные для пользователя"""
     participation = ChatParticipant.query.filter_by(chat_id=chat_id, user_id=user_id).first()
     if participation:
         last_message = Message.query.filter_by(chat_id=chat_id).order_by(Message.timestamp.desc()).first()
@@ -291,7 +286,6 @@ def chat(chat_id):
         flash('Вы не участник этого чата')
         return redirect(url_for('chats'))
 
-    # Отмечаем чат как прочитанный
     mark_chat_read(chat_id, user_id)
 
     chat_obj = Chat.query.get(chat_id)
@@ -451,21 +445,17 @@ def fix_db():
     """Добавляет поле last_read_message_id в таблицу chat_participants, если его нет"""
     try:
         with db.engine.connect() as conn:
-            # Проверяем существование колонки через информацию о таблице
-            result = conn.execute("""
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name = 'chat_participants' 
-                AND column_name = 'last_read_message_id'
-            """)
-            exists = result.fetchone() is not None
-            
-            if not exists:
+            # Пробуем добавить колонку, если она уже есть — ошибка игнорируется
+            try:
                 conn.execute("ALTER TABLE chat_participants ADD COLUMN last_read_message_id INTEGER DEFAULT 0")
                 conn.commit()
                 return "✅ Поле last_read_message_id добавлено. Теперь попробуй зарегистрироваться."
-            else:
-                return "✅ Поле last_read_message_id уже существует."
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "already exists" in error_msg or "duplicate column" in error_msg:
+                    return "✅ Поле last_read_message_id уже существует."
+                else:
+                    raise e
     except Exception as e:
         return f"❌ Ошибка: {e}"
 
