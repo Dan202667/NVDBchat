@@ -1,5 +1,6 @@
 import os
 import uuid
+import traceback
 from datetime import datetime
 import cloudinary
 import cloudinary.uploader
@@ -237,9 +238,13 @@ def logout():
 def chats():
     if 'user_id' not in session:
         return redirect(url_for('index'))
-    user_id = session['user_id']
-    chats_list = get_user_chats(user_id)
-    return render_template('chats.html', chats=chats_list)
+    try:
+        user_id = session['user_id']
+        chats_list = get_user_chats(user_id)
+        return render_template('chats.html', chats=chats_list)
+    except Exception as e:
+        traceback.print_exc()
+        return f"<pre>Ошибка: {e}\n{traceback.format_exc()}</pre>", 500
 
 @app.route('/search_user', methods=['POST'])
 def search_user():
@@ -428,6 +433,35 @@ def admin_users():
         return redirect(url_for('chats'))
     users = User.query.all()
     return render_template('admin_users.html', users=users)
+
+# ==================== ОТЛАДОЧНЫЕ МАРШРУТЫ ====================
+@app.route('/debug_chats')
+def debug_chats():
+    if 'user_id' not in session:
+        return "Не авторизован"
+    try:
+        user_id = session['user_id']
+        chats_list = get_user_chats(user_id)
+        return f"Чатов: {len(chats_list)}. Всё работает."
+    except Exception as e:
+        return f"<pre>{traceback.format_exc()}</pre>"
+
+@app.route('/fix_db')
+def fix_db():
+    """Добавляет поле last_read_message_id в таблицу chat_participants, если его нет"""
+    try:
+        with db.engine.connect() as conn:
+            # Проверяем, существует ли колонка
+            result = conn.execute("PRAGMA table_info(chat_participants)").fetchall()
+            columns = [col[1] for col in result]
+            if 'last_read_message_id' not in columns:
+                conn.execute("ALTER TABLE chat_participants ADD COLUMN last_read_message_id INTEGER DEFAULT 0")
+                conn.commit()
+                return "✅ Поле last_read_message_id добавлено. Теперь попробуй зарегистрироваться."
+            else:
+                return "✅ Поле last_read_message_id уже существует."
+    except Exception as e:
+        return f"❌ Ошибка: {e}"
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
