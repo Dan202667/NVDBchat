@@ -12,7 +12,7 @@
 
 {% block content %}
 <div class="chats-layout">
-    <!-- Левая панель со списком чатов (всегда видна на ПК, на телефоне скрывается при открытом чате) -->
+    <!-- Левая панель со списком чатов -->
     <div class="chats-sidebar" id="chatsSidebar">
         <div class="chats-header">
             <h2>Чаты</h2>
@@ -56,7 +56,7 @@
         </div>
     </div>
     
-    <!-- Правая панель (чат) — на телефоне изначально скрыта -->
+    <!-- Правая панель (чат) — на телефоне не отображается на этой странице -->
     <div class="chat-area" id="chatArea">
         <div style="display: flex; align-items: center; justify-content: center; color: #8696a0; height: 100%;">
             <div style="text-align: center;">
@@ -67,17 +67,4 @@
         </div>
     </div>
 </div>
-
-<script>
-    // Мобильная навигация: при клике на чат скрываем список и показываем чат
-    document.querySelectorAll('.chat-item').forEach(link => {
-        link.addEventListener('click', function(e) {
-            if (window.innerWidth <= 768) {
-                e.preventDefault();
-                const chatId = this.getAttribute('data-chat-id');
-                window.location.href = '/chat/' + chatId;
-            }
-        });
-    });
-</script>
 {% endblock %}

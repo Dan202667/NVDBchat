@@ -576,3 +576,28 @@ a:hover {
         display: inline-block !important;
     }
 }
+/* Мобильная навигация — кнопка назад */
+#backToChatsBtn {
+    display: none;
+    background: #00a884;
+    padding: 5px 10px;
+    border-radius: 8px;
+    color: white;
+    margin-right: 15px;
+    text-decoration: none;
+}
+
+@media (max-width: 768px) {
+    /* На телефоне скрываем левую панель в чате */
+    .chat-area .chats-sidebar {
+        display: none;
+    }
+    
+    .chat-area {
+        width: 100%;
+    }
+    
+    #backToChatsBtn {
+        display: inline-block !important;
+    }
+}
