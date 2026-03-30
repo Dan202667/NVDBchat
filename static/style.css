@@ -601,3 +601,19 @@ a:hover {
         display: inline-block !important;
     }
 }
+/* На странице чатов левая панель всегда видна */
+.chats-sidebar {
+    display: block !important;
+}
+
+/* На телефоне левая панель занимает всю ширину */
+@media (max-width: 768px) {
+    .chats-sidebar {
+        width: 100%;
+        display: block !important;
+    }
+    
+    .chat-area {
+        display: none !important;
+    }
+}
