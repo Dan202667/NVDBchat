@@ -60,7 +60,7 @@ class Message(db.Model):
     sender_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     content = db.Column(db.Text, nullable=True)
     file_url = db.Column(db.String(300), nullable=True)
-    file_type = db.Column(db.String(20), nullable=True)
+    file_type = db.Column(db.String(20), nullable=True)  # 'image', 'video', 'audio', 'text'
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 # ==================== СОЗДАНИЕ ТАБЛИЦ ПРИ ЗАПУСКЕ ====================
@@ -69,6 +69,8 @@ with app.app_context():
     print("✅ Таблицы базы данных созданы (или уже существуют)")
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+ALLOWED_AUDIO_EXTENSIONS = {'mp3', 'm4a', 'ogg', 'wav', 'webm'}
+
 def upload_to_cloudinary(file, folder='nvdbchat'):
     if not file:
         return None, None
@@ -80,6 +82,11 @@ def upload_to_cloudinary(file, folder='nvdbchat'):
         )
         file_url = upload_result.get('secure_url')
         file_type = upload_result.get('resource_type')
+        # Для аудио resource_type возвращает 'video', но мы сохраняем как 'audio'
+        if file_type == 'video':
+            ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+            if ext in ALLOWED_AUDIO_EXTENSIONS:
+                file_type = 'audio'
         return file_url, file_type
     except Exception as e:
         print(f"Ошибка загрузки в Cloudinary: {e}")
@@ -263,6 +270,8 @@ def chat(chat_id):
         msg.sender_name = sender.username or sender.name
         msg.sender_avatar = sender.avatar_url
 
+    # Определяем название чата и аватарку для шапки
+    other_avatar = None
     if chat_obj.type == 'private':
         other = ChatParticipant.query.filter(
             ChatParticipant.chat_id == chat_id,
@@ -271,6 +280,7 @@ def chat(chat_id):
         if other:
             other_user = User.query.get(other.user_id)
             chat_name = other_user.username or other_user.name
+            other_avatar = other_user.avatar_url
         else:
             chat_name = 'Личный чат'
     else:
@@ -284,7 +294,8 @@ def chat(chat_id):
         chat_name=chat_name,
         messages=messages,
         all_chats=all_chats,
-        chat=chat_obj
+        chat=chat_obj,
+        other_avatar=other_avatar
     )
 
 @app.route('/send_message/<int:chat_id>', methods=['POST'])

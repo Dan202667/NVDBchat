@@ -59,7 +59,15 @@
     <div class="chat-area">
         <div class="chat-header">
             <div class="chat-avatar" style="width: 40px; height: 40px;">
-                {% if chat.type == 'group' %}👥{% else %}👤{% endif %}
+                {% if chat.type == 'group' %}
+                    👥
+                {% else %}
+                    {% if other_avatar %}
+                        <img src="{{ other_avatar }}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                    {% else %}
+                        👤
+                    {% endif %}
+                {% endif %}
             </div>
             <div class="chat-header-info">
                 <div class="chat-header-name">{{ chat_name }}</div>
