@@ -5,13 +5,12 @@ import cloudinary
 import cloudinary.uploader
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-change-in-production'
 
-# Настройка базы данных (PostgreSQL на сервере, SQLite на компьютере)
+# Настройка базы данных
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -23,7 +22,6 @@ cloudinary.config(
 )
 
 db = SQLAlchemy(app)
-migrate = Migrate(app, db)
 
 # ==================== МОДЕЛИ ====================
 class User(db.Model):
@@ -64,6 +62,11 @@ class Message(db.Model):
     file_url = db.Column(db.String(300), nullable=True)
     file_type = db.Column(db.String(20), nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+# ==================== СОЗДАНИЕ ТАБЛИЦ ПРИ ЗАПУСКЕ ====================
+with app.app_context():
+    db.create_all()
+    print("✅ Таблицы базы данных созданы (или уже существуют)")
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def upload_to_cloudinary(file, folder='nvdbchat'):
@@ -199,21 +202,6 @@ def upload_avatar():
 def logout():
     session.clear()
     return redirect(url_for('index'))
-
-@app.route('/init_db')
-def init_db():
-    db.create_all()
-    return 'База данных инициализирована'
-
-@app.route('/migrate')
-def migrate_db():
-    """Временный маршрут для выполнения миграций на сервере"""
-    try:
-        from flask_migrate import upgrade
-        upgrade()
-        return "Миграции выполнены успешно! Таблицы созданы."
-    except Exception as e:
-        return f"Ошибка при выполнении миграций: {e}"
 
 @app.route('/chats')
 def chats():
