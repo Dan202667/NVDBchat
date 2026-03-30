@@ -4,7 +4,7 @@
     <h1>NVDBchat</h1>
     <div>
         <span style="color:#8696a0; margin-right:15px;">{{ session.username }}</span>
-        <a href="{{ url_for('chats') }}" id="backToChatsBtn">← Назад</a>
+        <a href="/chats" id="backToChatsBtn" style="display: inline-block;">← Назад</a>
         <a href="{{ url_for('profile') }}">Профиль</a>
         <a href="{{ url_for('logout') }}">Выйти</a>
     </div>
@@ -13,48 +13,7 @@
 
 {% block content %}
 <div class="chats-layout">
-    <!-- Левая панель со списком чатов (на телефоне скрыта) -->
-    <div class="chats-sidebar" id="chatsSidebar">
-        <div class="chats-header">
-            <h2>Чаты</h2>
-            <a href="{{ url_for('create_group') }}" class="new-chat-btn">+</a>
-        </div>
-        <div class="search-box">
-            <form method="POST" action="{{ url_for('search_user') }}">
-                <input type="text" name="username" placeholder="Поиск по @username..." required>
-            </form>
-        </div>
-        <div class="chats-list">
-            {% for c in all_chats %}
-            <a href="{{ url_for('chat', chat_id=c.id) }}" class="chat-item {% if c.id == chat_id %}active{% endif %}" style="{% if c.id == chat_id %}background: #202c33;{% endif %}">
-                <div class="chat-avatar">
-                    {% if c.type == 'group' %}
-                        👥
-                    {% else %}
-                        {% if c.other_avatar %}
-                            <img src="{{ c.other_avatar }}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
-                        {% else %}
-                            👤
-                        {% endif %}
-                    {% endif %}
-                </div>
-                <div class="chat-info">
-                    <div class="chat-name">{{ c.display_name }}</div>
-                    <div class="chat-last-msg">
-                        {% if c.last_message %}
-                            {{ c.last_message.content[:30] if c.last_message.content else 'Файл' }}
-                        {% else %}
-                            Нет сообщений
-                        {% endif %}
-                    </div>
-                </div>
-            </a>
-            {% endfor %}
-        </div>
-    </div>
-    
-    <!-- Правая панель с сообщениями -->
-    <div class="chat-area" id="chatArea">
+    <div class="chat-area" style="width: 100%;">
         <div class="chat-header">
             <div class="chat-avatar" style="width: 40px; height: 40px;">
                 {% if chat.type == 'group' %}
@@ -96,9 +55,13 @@
                             <source src="{{ msg.file_url }}">
                         </video>
                     {% elif msg.file_type == 'audio' %}
-                        <audio controls style="max-width: 200px; border-radius: 8px;">
-                            <source src="{{ msg.file_url }}">
-                        </audio>
+                        <div class="audio-player">
+                            <button class="audio-play-btn" data-url="{{ msg.file_url }}">▶️</button>
+                            <div class="audio-progress">
+                                <div class="audio-progress-bar"></div>
+                            </div>
+                            <span class="audio-duration">0:00</span>
+                        </div>
                     {% else %}
                         <div>{{ msg.content }}</div>
                     {% endif %}
@@ -130,26 +93,7 @@
     var lastMessageId = {{ messages[-1].id if messages else 0 }};
     var messagesDiv = document.getElementById('messages');
     
-    // ========== МОБИЛЬНАЯ НАВИГАЦИЯ ==========
-    function adjustForMobile() {
-        const isMobile = window.innerWidth <= 768;
-        const chatsSidebar = document.getElementById('chatsSidebar');
-        const backBtn = document.getElementById('backToChatsBtn');
-        
-        if (isMobile) {
-            // На телефоне: скрываем список чатов, показываем только чат
-            if (chatsSidebar) chatsSidebar.style.display = 'none';
-            if (backBtn) backBtn.style.display = 'inline-block';
-        } else {
-            // На ПК: показываем обе панели
-            if (chatsSidebar) chatsSidebar.style.display = 'block';
-            if (backBtn) backBtn.style.display = 'none';
-        }
-    }
-    
-    // При загрузке и изменении размера окна
-    window.addEventListener('load', adjustForMobile);
-    window.addEventListener('resize', adjustForMobile);
+    // На телефоне кнопка "Назад" уже видна, ничего дополнительно не делаем
     
     // ========== ЗАПИСЬ ГОЛОСА ==========
     let mediaRecorder;
@@ -253,14 +197,15 @@
             video.appendChild(source);
             bubble.appendChild(video);
         } else if (msg.file_type === 'audio') {
-            var audio = document.createElement('audio');
-            audio.controls = true;
-            audio.style.maxWidth = '200px';
-            audio.style.borderRadius = '8px';
-            var source = document.createElement('source');
-            source.src = msg.file_url;
-            audio.appendChild(source);
-            bubble.appendChild(audio);
+            var audioPlayer = document.createElement('div');
+            audioPlayer.className = 'audio-player';
+            audioPlayer.innerHTML = `
+                <button class="audio-play-btn" data-url="${msg.file_url}">▶️</button>
+                <div class="audio-progress"><div class="audio-progress-bar"></div></div>
+                <span class="audio-duration">0:00</span>
+            `;
+            bubble.appendChild(audioPlayer);
+            initAudioPlayer(audioPlayer);
         } else {
             var contentDiv = document.createElement('div');
             contentDiv.textContent = msg.content;
@@ -275,6 +220,43 @@
         msgDiv.appendChild(bubble);
         messagesDiv.appendChild(msgDiv);
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+    
+    function initAudioPlayer(container) {
+        const playBtn = container.querySelector('.audio-play-btn');
+        const progressBar = container.querySelector('.audio-progress-bar');
+        const durationSpan = container.querySelector('.audio-duration');
+        let audio = null;
+        let updateInterval = null;
+        
+        playBtn.addEventListener('click', () => {
+            if (audio && !audio.paused) {
+                audio.pause();
+                playBtn.textContent = '▶️';
+                clearInterval(updateInterval);
+            } else {
+                if (!audio) {
+                    const url = playBtn.getAttribute('data-url');
+                    audio = new Audio(url);
+                    audio.addEventListener('loadedmetadata', () => {
+                        const mins = Math.floor(audio.duration / 60);
+                        const secs = Math.floor(audio.duration % 60);
+                        durationSpan.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+                    });
+                    audio.addEventListener('ended', () => {
+                        playBtn.textContent = '▶️';
+                        progressBar.style.width = '0%';
+                        clearInterval(updateInterval);
+                    });
+                }
+                audio.play();
+                playBtn.textContent = '⏸️';
+                updateInterval = setInterval(() => {
+                    const percent = (audio.currentTime / audio.duration) * 100;
+                    progressBar.style.width = percent + '%';
+                }, 100);
+            }
+        });
     }
 
     document.getElementById('messageForm').addEventListener('submit', function(e) {
@@ -311,5 +293,8 @@
     }
 
     setInterval(pollNewMessages, 3000);
+    
+    // Инициализация существующих аудиоплееров
+    document.querySelectorAll('.audio-player').forEach(initAudioPlayer);
 </script>
 {% endblock %}

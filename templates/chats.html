@@ -12,7 +12,6 @@
 
 {% block content %}
 <div class="chats-layout">
-    <!-- Левая панель со списком чатов (всегда видна на странице чатов) -->
     <div class="chats-sidebar">
         <div class="chats-header">
             <h2>Чаты</h2>
@@ -25,7 +24,7 @@
         </div>
         <div class="chats-list">
             {% for chat in chats %}
-            <a href="{{ url_for('chat', chat_id=chat.id) }}" class="chat-item">
+            <a href="/chat/{{ chat.id }}" class="chat-item">
                 <div class="chat-avatar">
                     {% if chat.type == 'group' %}
                         👥
@@ -55,8 +54,5 @@
             {% endfor %}
         </div>
     </div>
-    
-    <!-- Правая панель (на странице чатов не используется) -->
-    <div class="chat-area" style="display: none;"></div>
 </div>
 {% endblock %}

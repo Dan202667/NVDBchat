@@ -627,3 +627,67 @@ a:hover {
         display: none !important;
     }
 }
+/* Стили для чата на телефоне */
+@media (max-width: 768px) {
+    .chat-area {
+        width: 100%;
+        height: calc(100vh - 61px);
+    }
+    
+    #backToChatsBtn {
+        display: inline-block !important;
+        background: #00a884;
+        padding: 5px 10px;
+        border-radius: 8px;
+        color: white;
+        margin-right: 15px;
+        text-decoration: none;
+    }
+}
+
+/* Аудиоплеер */
+.audio-player {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0, 168, 132, 0.1);
+    border-radius: 30px;
+    padding: 8px 12px;
+    min-width: 200px;
+}
+
+.audio-play-btn {
+    background: #00a884;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.audio-progress {
+    flex: 1;
+    height: 4px;
+    background: #3b4a54;
+    border-radius: 2px;
+    cursor: pointer;
+}
+
+.audio-progress-bar {
+    height: 100%;
+    background: #00a884;
+    border-radius: 2px;
+    width: 0%;
+}
+
+.audio-duration {
+    font-size: 0.75rem;
+    color: #8696a0;
+    min-width: 35px;
+    text-align: right;
+}
