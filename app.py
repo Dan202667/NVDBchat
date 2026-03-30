@@ -1,6 +1,5 @@
 import os
 import uuid
-import traceback
 from datetime import datetime
 import cloudinary
 import cloudinary.uploader
@@ -53,7 +52,6 @@ class ChatParticipant(db.Model):
     chat_id = db.Column(db.Integer, db.ForeignKey('chats.id'))
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     joined_at = db.Column(db.DateTime, default=datetime.utcnow)
-    last_read_message_id = db.Column(db.Integer, default=0)
 
 class Message(db.Model):
     __tablename__ = 'messages'
@@ -65,12 +63,12 @@ class Message(db.Model):
     file_type = db.Column(db.String(20), nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
-# ==================== СОЗДАНИЕ ТАБЛИЦ ПРИ ЗАПУСКЕ ====================
+# ==================== СОЗДАНИЕ ТАБЛИЦ ====================
 with app.app_context():
     db.create_all()
-    print("✅ Таблицы базы данных созданы (или уже существуют)")
+    print("✅ Таблицы базы данных созданы")
 
-# ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+# ==================== ФУНКЦИИ ====================
 ALLOWED_AUDIO_EXTENSIONS = {'mp3', 'm4a', 'ogg', 'wav', 'webm'}
 
 def upload_to_cloudinary(file, folder='nvdbchat'):
@@ -100,9 +98,6 @@ def get_user_chats(user_id):
 
     result = []
     for chat in chats:
-        user_participation = ChatParticipant.query.filter_by(chat_id=chat.id, user_id=user_id).first()
-        last_read_id = user_participation.last_read_message_id if user_participation else 0
-        
         if chat.type == 'private':
             other = ChatParticipant.query.filter(
                 ChatParticipant.chat_id == chat.id,
@@ -121,27 +116,13 @@ def get_user_chats(user_id):
             setattr(chat, 'other_avatar', None)
 
         last_msg = Message.query.filter_by(chat_id=chat.id).order_by(Message.timestamp.desc()).first()
-        unread_count = Message.query.filter(
-            Message.chat_id == chat.id,
-            Message.id > last_read_id,
-            Message.sender_id != user_id
-        ).count()
-        
         setattr(chat, 'display_name', display_name)
         setattr(chat, 'last_message', last_msg)
-        setattr(chat, 'unread_count', unread_count)
+        setattr(chat, 'unread_count', 0)  # Пока убрали подсчёт
         result.append(chat)
 
     result.sort(key=lambda c: c.last_message.timestamp if c.last_message else datetime(1970, 1, 1), reverse=True)
     return result
-
-def mark_chat_read(chat_id, user_id):
-    participation = ChatParticipant.query.filter_by(chat_id=chat_id, user_id=user_id).first()
-    if participation:
-        last_message = Message.query.filter_by(chat_id=chat_id).order_by(Message.timestamp.desc()).first()
-        if last_message:
-            participation.last_read_message_id = last_message.id
-            db.session.commit()
 
 # ==================== МАРШРУТЫ ====================
 @app.route('/')
@@ -233,13 +214,9 @@ def logout():
 def chats():
     if 'user_id' not in session:
         return redirect(url_for('index'))
-    try:
-        user_id = session['user_id']
-        chats_list = get_user_chats(user_id)
-        return render_template('chats.html', chats=chats_list)
-    except Exception as e:
-        traceback.print_exc()
-        return f"<pre>Ошибка: {e}\n{traceback.format_exc()}</pre>", 500
+    user_id = session['user_id']
+    chats_list = get_user_chats(user_id)
+    return render_template('chats.html', chats=chats_list)
 
 @app.route('/search_user', methods=['POST'])
 def search_user():
@@ -285,8 +262,6 @@ def chat(chat_id):
     if not participant:
         flash('Вы не участник этого чата')
         return redirect(url_for('chats'))
-
-    mark_chat_read(chat_id, user_id)
 
     chat_obj = Chat.query.get(chat_id)
     messages = Message.query.filter_by(chat_id=chat_id).order_by(Message.timestamp).all()
@@ -427,37 +402,6 @@ def admin_users():
         return redirect(url_for('chats'))
     users = User.query.all()
     return render_template('admin_users.html', users=users)
-
-# ==================== ОТЛАДОЧНЫЕ МАРШРУТЫ ====================
-@app.route('/debug_chats')
-def debug_chats():
-    if 'user_id' not in session:
-        return "Не авторизован"
-    try:
-        user_id = session['user_id']
-        chats_list = get_user_chats(user_id)
-        return f"Чатов: {len(chats_list)}. Всё работает."
-    except Exception as e:
-        return f"<pre>{traceback.format_exc()}</pre>"
-
-@app.route('/fix_db')
-def fix_db():
-    """Добавляет поле last_read_message_id в таблицу chat_participants, если его нет"""
-    try:
-        with db.engine.connect() as conn:
-            # Пробуем добавить колонку, если она уже есть — ошибка игнорируется
-            try:
-                conn.execute("ALTER TABLE chat_participants ADD COLUMN last_read_message_id INTEGER DEFAULT 0")
-                conn.commit()
-                return "✅ Поле last_read_message_id добавлено. Теперь попробуй зарегистрироваться."
-            except Exception as e:
-                error_msg = str(e).lower()
-                if "already exists" in error_msg or "duplicate column" in error_msg:
-                    return "✅ Поле last_read_message_id уже существует."
-                else:
-                    raise e
-    except Exception as e:
-        return f"❌ Ошибка: {e}"
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
