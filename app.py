@@ -205,6 +205,16 @@ def init_db():
     db.create_all()
     return 'База данных инициализирована'
 
+@app.route('/migrate')
+def migrate_db():
+    """Временный маршрут для выполнения миграций на сервере"""
+    try:
+        from flask_migrate import upgrade
+        upgrade()
+        return "Миграции выполнены успешно! Таблицы созданы."
+    except Exception as e:
+        return f"Ошибка при выполнении миграций: {e}"
+
 @app.route('/chats')
 def chats():
     if 'user_id' not in session:
@@ -398,11 +408,3 @@ def admin_users():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
-@app.route('/migrate')
-def migrate_db():
-    try:
-        from flask_migrate import upgrade
-        upgrade()
-        return "Миграции выполнены успешно! Теперь база данных создана."
-    except Exception as e:
-        return f"Ошибка при выполнении миграций: {e}"
