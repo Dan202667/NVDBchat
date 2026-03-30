@@ -89,6 +89,10 @@
                         <video controls style="max-width: 200px; border-radius: 8px;">
                             <source src="{{ msg.file_url }}">
                         </video>
+                    {% elif msg.file_type == 'audio' %}
+                        <audio controls style="max-width: 200px; border-radius: 8px;">
+                            <source src="{{ msg.file_url }}">
+                        </audio>
                     {% else %}
                         <div>{{ msg.content }}</div>
                     {% endif %}
@@ -101,10 +105,16 @@
         
         <form class="message-form" id="messageForm" enctype="multipart/form-data">
             <input type="text" name="content" placeholder="Введите сообщение..." autocomplete="off" id="messageInput">
-            <input type="file" name="file" accept="image/*,video/*" style="display: none;" id="fileInput">
+            <input type="file" name="file" accept="image/*,video/*,audio/*" style="display: none;" id="fileInput">
+            <button type="button" onclick="startRecording()" id="recordBtn" class="record-btn">🎙️</button>
             <button type="button" onclick="document.getElementById('fileInput').click();" style="background: #3b4a54; padding: 12px;">📎</button>
             <button type="submit">Отправить</button>
         </form>
+        
+        <div id="recordingIndicator" style="display: none; padding: 10px; background: #2a3942; border-radius: 8px; margin: 10px; text-align: center;">
+            🔴 Идёт запись... <span id="recordTimer">0:00</span>
+            <button type="button" onclick="stopRecording()" style="margin-left: 10px; background: #ff4444;">Остановить</button>
+        </div>
     </div>
 </div>
 
@@ -113,7 +123,79 @@
     var currentUserId = {{ session.user_id }};
     var lastMessageId = {{ messages[-1].id if messages else 0 }};
     var messagesDiv = document.getElementById('messages');
-
+    
+    // Переменные для записи
+    let mediaRecorder;
+    let audioChunks = [];
+    let recordingTimer;
+    let seconds = 0;
+    
+    // Функция начала записи
+    async function startRecording() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            
+            mediaRecorder.ondataavailable = event => {
+                audioChunks.push(event.data);
+            };
+            
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                const file = new File([audioBlob], 'voice_message.webm', { type: 'audio/webm' });
+                sendAudioFile(file);
+                stream.getTracks().forEach(track => track.stop());
+                document.getElementById('recordingIndicator').style.display = 'none';
+                clearInterval(recordingTimer);
+                seconds = 0;
+                document.getElementById('recordTimer').innerText = '0:00';
+                document.getElementById('recordBtn').style.background = '';
+            };
+            
+            mediaRecorder.start();
+            document.getElementById('recordingIndicator').style.display = 'flex';
+            document.getElementById('recordBtn').style.background = '#ff4444';
+            
+            // Таймер
+            recordingTimer = setInterval(() => {
+                seconds++;
+                const mins = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                document.getElementById('recordTimer').innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
+            }, 1000);
+        } catch (err) {
+            alert('Не удалось получить доступ к микрофону: ' + err.message);
+        }
+    }
+    
+    // Функция остановки записи
+    function stopRecording() {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+        }
+    }
+    
+    // Отправка аудиофайла
+    function sendAudioFile(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+        fetch('/send_message/' + chatId, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+            appendMessage(data);
+            lastMessageId = data.id;
+        })
+        .catch(err => console.error('Error:', err));
+    }
+    
     function appendMessage(msg) {
         var msgDiv = document.createElement('div');
         msgDiv.className = 'message-wrapper ' + (msg.sender_id == currentUserId ? 'my-message' : 'other-message');
@@ -146,6 +228,15 @@
             source.src = msg.file_url;
             video.appendChild(source);
             bubble.appendChild(video);
+        } else if (msg.file_type === 'audio') {
+            var audio = document.createElement('audio');
+            audio.controls = true;
+            audio.style.maxWidth = '200px';
+            audio.style.borderRadius = '8px';
+            var source = document.createElement('source');
+            source.src = msg.file_url;
+            audio.appendChild(source);
+            bubble.appendChild(audio);
         } else {
             var contentDiv = document.createElement('div');
             contentDiv.textContent = msg.content;
