@@ -398,3 +398,11 @@ def admin_users():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
+@app.route('/migrate')
+def migrate_db():
+    try:
+        from flask_migrate import upgrade
+        upgrade()
+        return "Миграции выполнены успешно! Теперь база данных создана."
+    except Exception as e:
+        return f"Ошибка при выполнении миграций: {e}"
