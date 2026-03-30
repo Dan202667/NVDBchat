@@ -617,3 +617,13 @@ a:hover {
         display: none !important;
     }
 }
+/* На странице чатов левая панель занимает всю ширину на телефоне */
+@media (max-width: 768px) {
+    .chats-sidebar {
+        width: 100%;
+    }
+    
+    .chat-area {
+        display: none !important;
+    }
+}
