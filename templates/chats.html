@@ -12,7 +12,8 @@
 
 {% block content %}
 <div class="chats-layout">
-    <div class="chats-sidebar">
+    <!-- Левая панель со списком чатов (всегда видна на ПК, на телефоне скрывается при открытом чате) -->
+    <div class="chats-sidebar" id="chatsSidebar">
         <div class="chats-header">
             <h2>Чаты</h2>
             <a href="{{ url_for('create_group') }}" class="new-chat-btn">+</a>
@@ -24,7 +25,7 @@
         </div>
         <div class="chats-list">
             {% for chat in chats %}
-            <a href="{{ url_for('chat', chat_id=chat.id) }}" class="chat-item">
+            <a href="{{ url_for('chat', chat_id=chat.id) }}" class="chat-item" data-chat-id="{{ chat.id }}">
                 <div class="chat-avatar">
                     {% if chat.type == 'group' %}
                         👥
@@ -54,12 +55,29 @@
             {% endfor %}
         </div>
     </div>
-    <div class="chat-area" style="display: flex; align-items: center; justify-content: center; color: #8696a0;">
-        <div style="text-align: center;">
-            <div style="font-size: 3rem; margin-bottom: 20px;">💬</div>
-            <h2>Выберите чат</h2>
-            <p>Нажмите на чат слева, чтобы начать общение</p>
+    
+    <!-- Правая панель (чат) — на телефоне изначально скрыта -->
+    <div class="chat-area" id="chatArea">
+        <div style="display: flex; align-items: center; justify-content: center; color: #8696a0; height: 100%;">
+            <div style="text-align: center;">
+                <div style="font-size: 3rem; margin-bottom: 20px;">💬</div>
+                <h2>Выберите чат</h2>
+                <p>Нажмите на чат слева, чтобы начать общение</p>
+            </div>
         </div>
     </div>
 </div>
+
+<script>
+    // Мобильная навигация: при клике на чат скрываем список и показываем чат
+    document.querySelectorAll('.chat-item').forEach(link => {
+        link.addEventListener('click', function(e) {
+            if (window.innerWidth <= 768) {
+                e.preventDefault();
+                const chatId = this.getAttribute('data-chat-id');
+                window.location.href = '/chat/' + chatId;
+            }
+        });
+    });
+</script>
 {% endblock %}

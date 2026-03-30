@@ -4,7 +4,7 @@
     <h1>NVDBchat</h1>
     <div>
         <span style="color:#8696a0; margin-right:15px;">{{ session.username }}</span>
-        <a href="{{ url_for('chats') }}">К чатам</a>
+        <a href="{{ url_for('chats') }}" id="backToChatsBtn" style="display: none;">← Назад</a>
         <a href="{{ url_for('profile') }}">Профиль</a>
         <a href="{{ url_for('logout') }}">Выйти</a>
     </div>
@@ -13,19 +13,17 @@
 
 {% block content %}
 <div class="chats-layout">
-    <!-- Левая панель со списком чатов -->
-    <div class="chats-sidebar">
+    <!-- Левая панель со списком чатов (на телефоне скрыта при открытом чате) -->
+    <div class="chats-sidebar" id="chatsSidebar">
         <div class="chats-header">
             <h2>Чаты</h2>
             <a href="{{ url_for('create_group') }}" class="new-chat-btn">+</a>
         </div>
-        
         <div class="search-box">
             <form method="POST" action="{{ url_for('search_user') }}">
                 <input type="text" name="username" placeholder="Поиск по @username..." required>
             </form>
         </div>
-        
         <div class="chats-list">
             {% for c in all_chats %}
             <a href="{{ url_for('chat', chat_id=c.id) }}" class="chat-item {% if c.id == chat_id %}active{% endif %}" style="{% if c.id == chat_id %}background: #202c33;{% endif %}">
@@ -56,7 +54,7 @@
     </div>
     
     <!-- Правая панель с сообщениями -->
-    <div class="chat-area">
+    <div class="chat-area" id="chatArea">
         <div class="chat-header">
             <div class="chat-avatar" style="width: 40px; height: 40px;">
                 {% if chat.type == 'group' %}
@@ -132,13 +130,42 @@
     var lastMessageId = {{ messages[-1].id if messages else 0 }};
     var messagesDiv = document.getElementById('messages');
     
-    // Переменные для записи
+    // ========== МОБИЛЬНАЯ НАВИГАЦИЯ ==========
+    function adjustForMobile() {
+        const isMobile = window.innerWidth <= 768;
+        const chatsSidebar = document.getElementById('chatsSidebar');
+        const chatArea = document.getElementById('chatArea');
+        const backBtn = document.getElementById('backToChatsBtn');
+        
+        if (isMobile) {
+            // На телефоне: список чатов скрыт, показываем только чат
+            if (chatArea) chatArea.style.display = 'flex';
+            if (chatsSidebar) chatsSidebar.style.display = 'none';
+            if (backBtn) backBtn.style.display = 'inline-block';
+        } else {
+            // На ПК: показываем обе панели
+            if (chatArea) chatArea.style.display = 'flex';
+            if (chatsSidebar) chatsSidebar.style.display = 'block';
+            if (backBtn) backBtn.style.display = 'none';
+        }
+    }
+    
+    // При загрузке и изменении размера окна
+    window.addEventListener('load', adjustForMobile);
+    window.addEventListener('resize', adjustForMobile);
+    
+    // Кнопка "Назад" возвращает к списку чатов
+    document.getElementById('backToChatsBtn')?.addEventListener('click', function(e) {
+        e.preventDefault();
+        window.location.href = '/chats';
+    });
+    
+    // ========== ЗАПИСЬ ГОЛОСА ==========
     let mediaRecorder;
     let audioChunks = [];
     let recordingTimer;
     let seconds = 0;
     
-    // Функция начала записи
     async function startRecording() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -165,7 +192,6 @@
             document.getElementById('recordingIndicator').style.display = 'flex';
             document.getElementById('recordBtn').style.background = '#ff4444';
             
-            // Таймер
             recordingTimer = setInterval(() => {
                 seconds++;
                 const mins = Math.floor(seconds / 60);
@@ -177,14 +203,12 @@
         }
     }
     
-    // Функция остановки записи
     function stopRecording() {
         if (mediaRecorder && mediaRecorder.state === 'recording') {
             mediaRecorder.stop();
         }
     }
     
-    // Отправка аудиофайла
     function sendAudioFile(file) {
         const formData = new FormData();
         formData.append('file', file);
@@ -204,6 +228,7 @@
         .catch(err => console.error('Error:', err));
     }
     
+    // ========== ОТОБРАЖЕНИЕ СООБЩЕНИЙ ==========
     function appendMessage(msg) {
         var msgDiv = document.createElement('div');
         msgDiv.className = 'message-wrapper ' + (msg.sender_id == currentUserId ? 'my-message' : 'other-message');

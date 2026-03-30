@@ -551,3 +551,28 @@ a:hover {
 #recordingIndicator button:hover {
     background: #cc3333;
 }
+/* Мобильная навигация — кнопка назад */
+#backToChatsBtn {
+    display: none;
+    background: #00a884;
+    padding: 5px 10px;
+    border-radius: 8px;
+    color: white;
+    margin-right: 15px;
+}
+
+@media (max-width: 768px) {
+    /* На телефоне список чатов скрыт, чат занимает весь экран */
+    .chats-sidebar {
+        display: none;
+    }
+    
+    .chat-area {
+        width: 100%;
+        height: 100vh;
+    }
+    
+    #backToChatsBtn {
+        display: inline-block !important;
+    }
+}
