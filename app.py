@@ -451,10 +451,16 @@ def fix_db():
     """Добавляет поле last_read_message_id в таблицу chat_participants, если его нет"""
     try:
         with db.engine.connect() as conn:
-            # Проверяем, существует ли колонка
-            result = conn.execute("PRAGMA table_info(chat_participants)").fetchall()
-            columns = [col[1] for col in result]
-            if 'last_read_message_id' not in columns:
+            # Проверяем существование колонки через информацию о таблице
+            result = conn.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'chat_participants' 
+                AND column_name = 'last_read_message_id'
+            """)
+            exists = result.fetchone() is not None
+            
+            if not exists:
                 conn.execute("ALTER TABLE chat_participants ADD COLUMN last_read_message_id INTEGER DEFAULT 0")
                 conn.commit()
                 return "✅ Поле last_read_message_id добавлено. Теперь попробуй зарегистрироваться."
