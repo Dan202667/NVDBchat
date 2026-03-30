@@ -1,89 +1,89 @@
 {% extends "base.html" %}
 {% block header %}
 <div class="app-header">
-    <h1>NVDBchat</h1>
+    <div class="header-left">
+        <button class="menu-btn" onclick="toggleMenu()">☰</button>
+        <h1>NVDBchat</h1>
+    </div>
     <div>
+        <a href="{{ url_for('chats') }}" class="back-btn">← Назад</a>
         <span style="color:#8696a0; margin-right:15px;">{{ session.username }}</span>
-        <a href="/chats" id="backToChatsBtn" style="display: inline-block;">← Назад</a>
-        <a href="{{ url_for('profile') }}">Профиль</a>
         <a href="{{ url_for('logout') }}">Выйти</a>
     </div>
 </div>
 {% endblock %}
 
 {% block content %}
-<div class="chats-layout">
-    <div class="chat-area" style="width: 100%;">
-        <div class="chat-header">
-            <div class="chat-avatar" style="width: 40px; height: 40px;">
-                {% if chat.type == 'group' %}
-                    👥
+<div class="chat-area-full">
+    <div class="chat-header">
+        <div class="chat-avatar" style="width: 40px; height: 40px;">
+            {% if chat.type == 'group' %}
+                👥
+            {% else %}
+                {% if other_avatar %}
+                    <img src="{{ other_avatar }}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
                 {% else %}
-                    {% if other_avatar %}
-                        <img src="{{ other_avatar }}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
-                    {% else %}
-                        👤
-                    {% endif %}
+                    👤
+                {% endif %}
+            {% endif %}
+        </div>
+        <div class="chat-header-info">
+            <div class="chat-header-name">{{ chat_name }}</div>
+            <div class="chat-header-status">
+                {% if chat.type == 'group' %}
+                    Групповой чат
+                {% else %}
+                    Личный чат
                 {% endif %}
             </div>
-            <div class="chat-header-info">
-                <div class="chat-header-name">{{ chat_name }}</div>
-                <div class="chat-header-status">
-                    {% if chat.type == 'group' %}
-                        Групповой чат
-                    {% else %}
-                        Личный чат
-                    {% endif %}
-                </div>
-            </div>
         </div>
-        
-        <div class="messages-container" id="messages">
-            {% for msg in messages %}
-            <div class="message-wrapper {% if msg.sender_id == session.user_id %}my-message{% else %}other-message{% endif %}" id="msg-{{ msg.id }}">
-                <div class="message-bubble">
-                    {% if msg.sender_id != session.user_id and chat.type == 'group' %}
-                    <div class="message-sender">{{ msg.sender_name }}</div>
-                    {% endif %}
-                    
-                    {% if msg.file_type == 'image' %}
-                        <img src="{{ msg.file_url }}" 
-                             style="max-width: 200px; border-radius: 8px; cursor: pointer;" 
-                             onclick="window.open(this.src, '_blank')">
-                    {% elif msg.file_type == 'video' %}
-                        <video controls style="max-width: 200px; border-radius: 8px;">
-                            <source src="{{ msg.file_url }}">
-                        </video>
-                    {% elif msg.file_type == 'audio' %}
-                        <div class="audio-player">
-                            <button class="audio-play-btn" data-url="{{ msg.file_url }}">▶️</button>
-                            <div class="audio-progress">
-                                <div class="audio-progress-bar"></div>
-                            </div>
-                            <span class="audio-duration">0:00</span>
+    </div>
+    
+    <div class="messages-container" id="messages">
+        {% for msg in messages %}
+        <div class="message-wrapper {% if msg.sender_id == session.user_id %}my-message{% else %}other-message{% endif %}" id="msg-{{ msg.id }}">
+            <div class="message-bubble">
+                {% if msg.sender_id != session.user_id and chat.type == 'group' %}
+                <div class="message-sender">{{ msg.sender_name }}</div>
+                {% endif %}
+                
+                {% if msg.file_type == 'image' %}
+                    <img src="{{ msg.file_url }}" 
+                         style="max-width: 200px; border-radius: 8px; cursor: pointer;" 
+                         onclick="window.open(this.src, '_blank')">
+                {% elif msg.file_type == 'video' %}
+                    <video controls style="max-width: 200px; border-radius: 8px;">
+                        <source src="{{ msg.file_url }}">
+                    </video>
+                {% elif msg.file_type == 'audio' %}
+                    <div class="audio-player" data-url="{{ msg.file_url }}">
+                        <button class="audio-play-btn">▶️</button>
+                        <div class="audio-progress">
+                            <div class="audio-progress-bar"></div>
                         </div>
-                    {% else %}
-                        <div>{{ msg.content }}</div>
-                    {% endif %}
-                    
-                    <div class="message-time">{{ msg.timestamp.strftime('%H:%M') }}</div>
-                </div>
+                        <span class="audio-duration">0:00</span>
+                    </div>
+                {% else %}
+                    <div>{{ msg.content }}</div>
+                {% endif %}
+                
+                <div class="message-time">{{ msg.timestamp.strftime('%H:%M') }}</div>
             </div>
-            {% endfor %}
         </div>
-        
-        <form class="message-form" id="messageForm" enctype="multipart/form-data">
-            <input type="text" name="content" placeholder="Введите сообщение..." autocomplete="off" id="messageInput">
-            <input type="file" name="file" accept="image/*,video/*,audio/*" style="display: none;" id="fileInput">
-            <button type="button" onclick="startRecording()" id="recordBtn" class="record-btn">🎙️</button>
-            <button type="button" onclick="document.getElementById('fileInput').click();" style="background: #3b4a54; padding: 12px;">📎</button>
-            <button type="submit">Отправить</button>
-        </form>
-        
-        <div id="recordingIndicator" style="display: none; padding: 10px; background: #2a3942; border-radius: 8px; margin: 10px; text-align: center;">
-            🔴 Идёт запись... <span id="recordTimer">0:00</span>
-            <button type="button" onclick="stopRecording()" style="margin-left: 10px; background: #ff4444;">Остановить</button>
-        </div>
+        {% endfor %}
+    </div>
+    
+    <form class="message-form" id="messageForm" enctype="multipart/form-data">
+        <input type="text" name="content" placeholder="Введите сообщение..." autocomplete="off" id="messageInput">
+        <input type="file" name="file" accept="image/*,video/*,audio/*" style="display: none;" id="fileInput">
+        <button type="button" onclick="startRecording()" id="recordBtn" class="record-btn">🎙️</button>
+        <button type="button" onclick="document.getElementById('fileInput').click();" style="background: #3b4a54; padding: 12px;">📎</button>
+        <button type="submit">Отправить</button>
+    </form>
+    
+    <div id="recordingIndicator" style="display: none; padding: 10px; background: #2a3942; border-radius: 8px; margin: 10px; text-align: center;">
+        🔴 Идёт запись... <span id="recordTimer">0:00</span>
+        <button type="button" onclick="stopRecording()" style="margin-left: 10px; background: #ff4444;">Остановить</button>
     </div>
 </div>
 
@@ -93,7 +93,43 @@
     var lastMessageId = {{ messages[-1].id if messages else 0 }};
     var messagesDiv = document.getElementById('messages');
     
-    // На телефоне кнопка "Назад" уже видна, ничего дополнительно не делаем
+    // ========== АУДИОПЛЕЕР ==========
+    document.querySelectorAll('.audio-player').forEach(container => {
+        const playBtn = container.querySelector('.audio-play-btn');
+        const progressBar = container.querySelector('.audio-progress-bar');
+        const durationSpan = container.querySelector('.audio-duration');
+        let audio = null;
+        let updateInterval = null;
+        
+        playBtn.addEventListener('click', () => {
+            if (audio && !audio.paused) {
+                audio.pause();
+                playBtn.textContent = '▶️';
+                clearInterval(updateInterval);
+            } else {
+                if (!audio) {
+                    const url = container.getAttribute('data-url');
+                    audio = new Audio(url);
+                    audio.addEventListener('loadedmetadata', () => {
+                        const mins = Math.floor(audio.duration / 60);
+                        const secs = Math.floor(audio.duration % 60);
+                        durationSpan.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+                    });
+                    audio.addEventListener('ended', () => {
+                        playBtn.textContent = '▶️';
+                        progressBar.style.width = '0%';
+                        clearInterval(updateInterval);
+                    });
+                }
+                audio.play();
+                playBtn.textContent = '⏸️';
+                updateInterval = setInterval(() => {
+                    const percent = (audio.currentTime / audio.duration) * 100;
+                    progressBar.style.width = percent + '%';
+                }, 100);
+            }
+        });
+    });
     
     // ========== ЗАПИСЬ ГОЛОСА ==========
     let mediaRecorder;
@@ -199,13 +235,53 @@
         } else if (msg.file_type === 'audio') {
             var audioPlayer = document.createElement('div');
             audioPlayer.className = 'audio-player';
-            audioPlayer.innerHTML = `
-                <button class="audio-play-btn" data-url="${msg.file_url}">▶️</button>
-                <div class="audio-progress"><div class="audio-progress-bar"></div></div>
-                <span class="audio-duration">0:00</span>
-            `;
+            audioPlayer.setAttribute('data-url', msg.file_url);
+            var playBtn = document.createElement('button');
+            playBtn.className = 'audio-play-btn';
+            playBtn.textContent = '▶️';
+            var progress = document.createElement('div');
+            progress.className = 'audio-progress';
+            var progressBar = document.createElement('div');
+            progressBar.className = 'audio-progress-bar';
+            progress.appendChild(progressBar);
+            var durationSpan = document.createElement('span');
+            durationSpan.className = 'audio-duration';
+            durationSpan.textContent = '0:00';
+            audioPlayer.appendChild(playBtn);
+            audioPlayer.appendChild(progress);
+            audioPlayer.appendChild(durationSpan);
             bubble.appendChild(audioPlayer);
-            initAudioPlayer(audioPlayer);
+            
+            // Добавляем обработчик для нового плеера
+            let audio = null;
+            let updateInterval = null;
+            playBtn.addEventListener('click', () => {
+                if (audio && !audio.paused) {
+                    audio.pause();
+                    playBtn.textContent = '▶️';
+                    clearInterval(updateInterval);
+                } else {
+                    if (!audio) {
+                        audio = new Audio(msg.file_url);
+                        audio.addEventListener('loadedmetadata', () => {
+                            const mins = Math.floor(audio.duration / 60);
+                            const secs = Math.floor(audio.duration % 60);
+                            durationSpan.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+                        });
+                        audio.addEventListener('ended', () => {
+                            playBtn.textContent = '▶️';
+                            progressBar.style.width = '0%';
+                            clearInterval(updateInterval);
+                        });
+                    }
+                    audio.play();
+                    playBtn.textContent = '⏸️';
+                    updateInterval = setInterval(() => {
+                        const percent = (audio.currentTime / audio.duration) * 100;
+                        progressBar.style.width = percent + '%';
+                    }, 100);
+                }
+            });
         } else {
             var contentDiv = document.createElement('div');
             contentDiv.textContent = msg.content;
@@ -220,43 +296,6 @@
         msgDiv.appendChild(bubble);
         messagesDiv.appendChild(msgDiv);
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-    
-    function initAudioPlayer(container) {
-        const playBtn = container.querySelector('.audio-play-btn');
-        const progressBar = container.querySelector('.audio-progress-bar');
-        const durationSpan = container.querySelector('.audio-duration');
-        let audio = null;
-        let updateInterval = null;
-        
-        playBtn.addEventListener('click', () => {
-            if (audio && !audio.paused) {
-                audio.pause();
-                playBtn.textContent = '▶️';
-                clearInterval(updateInterval);
-            } else {
-                if (!audio) {
-                    const url = playBtn.getAttribute('data-url');
-                    audio = new Audio(url);
-                    audio.addEventListener('loadedmetadata', () => {
-                        const mins = Math.floor(audio.duration / 60);
-                        const secs = Math.floor(audio.duration % 60);
-                        durationSpan.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
-                    });
-                    audio.addEventListener('ended', () => {
-                        playBtn.textContent = '▶️';
-                        progressBar.style.width = '0%';
-                        clearInterval(updateInterval);
-                    });
-                }
-                audio.play();
-                playBtn.textContent = '⏸️';
-                updateInterval = setInterval(() => {
-                    const percent = (audio.currentTime / audio.duration) * 100;
-                    progressBar.style.width = percent + '%';
-                }, 100);
-            }
-        });
     }
 
     document.getElementById('messageForm').addEventListener('submit', function(e) {
@@ -294,7 +333,7 @@
 
     setInterval(pollNewMessages, 3000);
     
-    // Инициализация существующих аудиоплееров
-    document.querySelectorAll('.audio-player').forEach(initAudioPlayer);
+    // Скролл вниз при загрузке
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
 </script>
 {% endblock %}

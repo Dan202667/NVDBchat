@@ -1,28 +1,40 @@
 {% extends "base.html" %}
+{% block header %}
+<div class="app-header">
+    <div class="header-left">
+        <button class="menu-btn" onclick="toggleMenu()">☰</button>
+        <h1>NVDBchat</h1>
+    </div>
+    <div>
+        {% if session.user_id %}
+            <span style="color:#8696a0; margin-right:15px;">{{ session.username }}</span>
+            <a href="{{ url_for('logout') }}">Выйти</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
 {% block content %}
 <div class="auth-container" style="max-width: 400px;">
     <h2>Мой профиль</h2>
     
-    <div style="text-align: center; margin-bottom: 30px;">
-        {% if user.avatar_url %}
-            <img src="{{ user.avatar_url }}" 
-                 style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; margin: 0 auto 20px;">
-        {% else %}
-            <div style="width: 100px; height: 100px; border-radius: 50%; background: #00a884; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; color: white;">
-                {{ user.username[0]|upper if user.username else '?' }}
-            </div>
-        {% endif %}
-        <div style="font-size: 1.5rem; font-weight: 600;">{{ user.name }}</div>
+    <div style="text-align: center; margin-bottom: 30px; position: relative;">
+        <div class="avatar-wrapper">
+            {% if user.avatar_url %}
+                <img src="{{ user.avatar_url }}" class="profile-avatar" id="profileAvatar">
+            {% else %}
+                <div class="profile-avatar-placeholder" id="profileAvatar">
+                    {{ user.username[0]|upper if user.username else '?' }}
+                </div>
+            {% endif %}
+            <label for="avatarUpload" class="avatar-upload-btn">
+                📷
+                <input type="file" id="avatarUpload" accept="image/*" style="display: none;">
+            </label>
+        </div>
+        <div style="font-size: 1.5rem; font-weight: 600; margin-top: 15px;">{{ user.name }}</div>
         <div style="color: #00a884;">@{{ user.username }}</div>
     </div>
-    
-    <form method="POST" action="{{ url_for('upload_avatar') }}" enctype="multipart/form-data">
-        <div class="form-group">
-            <label>Сменить аватар:</label>
-            <input type="file" name="avatar" accept="image/*" required>
-        </div>
-        <button type="submit" class="btn">Загрузить</button>
-    </form>
     
     <div class="form-group" style="margin-top: 20px;">
         <label style="color: #8696a0;">Дата регистрации</label>
@@ -33,4 +45,24 @@
     
     <a href="{{ url_for('chats') }}" class="btn" style="margin-top: 20px; display: block; text-align: center;">К чатам</a>
 </div>
+
+<script>
+    document.getElementById('avatarUpload').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const formData = new FormData();
+            formData.append('avatar', file);
+            fetch('/upload_avatar', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (response.redirected) {
+                    window.location.href = response.url;
+                }
+            })
+            .catch(err => console.error('Error:', err));
+        }
+    });
+</script>
 {% endblock %}

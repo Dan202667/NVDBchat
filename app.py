@@ -52,6 +52,7 @@ class ChatParticipant(db.Model):
     chat_id = db.Column(db.Integer, db.ForeignKey('chats.id'))
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     joined_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_read_message_id = db.Column(db.Integer, default=0)  # ID последнего прочитанного сообщения
 
 class Message(db.Model):
     __tablename__ = 'messages'
@@ -82,7 +83,6 @@ def upload_to_cloudinary(file, folder='nvdbchat'):
         )
         file_url = upload_result.get('secure_url')
         file_type = upload_result.get('resource_type')
-        # Для аудио resource_type возвращает 'video', но мы сохраняем как 'audio'
         if file_type == 'video':
             ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
             if ext in ALLOWED_AUDIO_EXTENSIONS:
@@ -93,12 +93,17 @@ def upload_to_cloudinary(file, folder='nvdbchat'):
         return None, None
 
 def get_user_chats(user_id):
+    """Возвращает список чатов пользователя с дополнительными полями"""
     participations = ChatParticipant.query.filter_by(user_id=user_id).all()
     chat_ids = [p.chat_id for p in participations]
     chats = Chat.query.filter(Chat.id.in_(chat_ids)).all()
 
     result = []
     for chat in chats:
+        # Получаем информацию об участнике (последнее прочитанное сообщение)
+        user_participation = ChatParticipant.query.filter_by(chat_id=chat.id, user_id=user_id).first()
+        last_read_id = user_participation.last_read_message_id if user_participation else 0
+        
         if chat.type == 'private':
             other = ChatParticipant.query.filter(
                 ChatParticipant.chat_id == chat.id,
@@ -117,12 +122,30 @@ def get_user_chats(user_id):
             setattr(chat, 'other_avatar', None)
 
         last_msg = Message.query.filter_by(chat_id=chat.id).order_by(Message.timestamp.desc()).first()
+        
+        # Подсчёт непрочитанных сообщений (сообщения, ID которых больше last_read_id)
+        unread_count = Message.query.filter(
+            Message.chat_id == chat.id,
+            Message.id > last_read_id,
+            Message.sender_id != user_id  # Не считаем свои сообщения
+        ).count()
+        
         setattr(chat, 'display_name', display_name)
         setattr(chat, 'last_message', last_msg)
+        setattr(chat, 'unread_count', unread_count)
         result.append(chat)
 
     result.sort(key=lambda c: c.last_message.timestamp if c.last_message else datetime(1970, 1, 1), reverse=True)
     return result
+
+def mark_chat_read(chat_id, user_id):
+    """Отмечает все сообщения в чате как прочитанные для пользователя"""
+    participation = ChatParticipant.query.filter_by(chat_id=chat_id, user_id=user_id).first()
+    if participation:
+        last_message = Message.query.filter_by(chat_id=chat_id).order_by(Message.timestamp.desc()).first()
+        if last_message:
+            participation.last_read_message_id = last_message.id
+            db.session.commit()
 
 # ==================== МАРШРУТЫ ====================
 @app.route('/')
@@ -263,6 +286,9 @@ def chat(chat_id):
         flash('Вы не участник этого чата')
         return redirect(url_for('chats'))
 
+    # Отмечаем чат как прочитанный
+    mark_chat_read(chat_id, user_id)
+
     chat_obj = Chat.query.get(chat_id)
     messages = Message.query.filter_by(chat_id=chat_id).order_by(Message.timestamp).all()
     for msg in messages:
@@ -270,7 +296,6 @@ def chat(chat_id):
         msg.sender_name = sender.username or sender.name
         msg.sender_avatar = sender.avatar_url
 
-    # Определяем название чата и аватарку для шапки
     other_avatar = None
     if chat_obj.type == 'private':
         other = ChatParticipant.query.filter(

@@ -691,3 +691,300 @@ a:hover {
     min-width: 35px;
     text-align: right;
 }
+/* ========== МЕНЮ-БУРГЕР ========== */
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.menu-btn {
+    background: none;
+    border: none;
+    color: #e9edef;
+    font-size: 1.8rem;
+    cursor: pointer;
+    padding: 5px 10px;
+    width: auto;
+}
+
+.side-menu {
+    position: fixed;
+    top: 0;
+    left: -300px;
+    width: 280px;
+    height: 100%;
+    background: #202c33;
+    z-index: 2000;
+    transition: left 0.3s ease;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+}
+
+.side-menu.open {
+    left: 0;
+}
+
+.side-menu-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid #2a3942;
+}
+
+.side-menu-header h3 {
+    color: #e9edef;
+    margin: 0;
+}
+
+.close-menu {
+    background: none;
+    border: none;
+    color: #e9edef;
+    font-size: 1.5rem;
+    cursor: pointer;
+    width: auto;
+}
+
+.side-menu-content {
+    padding: 20px;
+}
+
+.side-menu-content a {
+    display: block;
+    padding: 12px 0;
+    color: #e9edef;
+    text-decoration: none;
+    font-size: 1.1rem;
+}
+
+.side-menu-content a:hover {
+    color: #00a884;
+}
+
+.menu-divider {
+    height: 1px;
+    background: #2a3942;
+    margin: 15px 0;
+}
+
+.menu-item {
+    padding: 12px 0;
+    color: #e9edef;
+}
+
+.theme-switch {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.theme-btn {
+    background: #2a3942;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 8px;
+    color: #e9edef;
+    cursor: pointer;
+    width: auto;
+}
+
+.theme-btn:hover {
+    background: #00a884;
+}
+
+/* ========== СВЕТЛАЯ ТЕМА ========== */
+body.light-theme {
+    background: #e8edf2;
+}
+
+body.light-theme .container {
+    background: #ffffff;
+}
+
+body.light-theme .app-header,
+body.light-theme .chats-sidebar,
+body.light-theme .chat-header,
+body.light-theme .message-form {
+    background: #f0f2f5;
+    border-color: #e0e0e0;
+}
+
+body.light-theme .app-header h1,
+body.light-theme .chat-header-name,
+body.light-theme .chat-name {
+    color: #1f2c33;
+}
+
+body.light-theme .chat-item {
+    border-bottom-color: #e0e0e0;
+}
+
+body.light-theme .chat-item:hover {
+    background: #e8f0fe;
+}
+
+body.light-theme .message-bubble {
+    background: #ffffff;
+    color: #1f2c33;
+}
+
+body.light-theme .my-message .message-bubble {
+    background: #d9f0ec;
+}
+
+body.light-theme .message-form input {
+    background: #ffffff;
+    border-color: #e0e0e0;
+    color: #1f2c33;
+}
+
+body.light-theme .side-menu {
+    background: #ffffff;
+}
+
+body.light-theme .side-menu-header h3,
+body.light-theme .side-menu-content a,
+body.light-theme .menu-item {
+    color: #1f2c33;
+}
+
+body.light-theme .side-menu-header {
+    border-bottom-color: #e0e0e0;
+}
+
+body.light-theme .menu-divider {
+    background: #e0e0e0;
+}
+
+/* ========== ИНДИКАТОР НЕПРОЧИТАННЫХ ========== */
+.unread-badge {
+    background: #00a884;
+    color: white;
+    border-radius: 20px;
+    padding: 2px 8px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    margin-left: 8px;
+}
+
+.chat-last-msg {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* ========== АВАТАРКА В ПРОФИЛЕ ========== */
+.avatar-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.profile-avatar {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #00a884;
+}
+
+.profile-avatar-placeholder {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: #00a884;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    color: white;
+    border: 3px solid #00a884;
+}
+
+.avatar-upload-btn {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    background: #00a884;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.2rem;
+    transition: transform 0.2s;
+    color: white;
+}
+
+.avatar-upload-btn:hover {
+    transform: scale(1.1);
+}
+
+/* ========== АУДИОПЛЕЕР ========== */
+.audio-player {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0, 168, 132, 0.1);
+    border-radius: 30px;
+    padding: 8px 12px;
+    min-width: 200px;
+}
+
+.audio-play-btn {
+    background: #00a884;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+    color: white;
+}
+
+.audio-play-btn:hover {
+    transform: scale(1.05);
+}
+
+.audio-progress {
+    flex: 1;
+    height: 4px;
+    background: #3b4a54;
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+}
+
+.audio-progress-bar {
+    height: 100%;
+    background: #00a884;
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.1s linear;
+}
+
+.audio-duration {
+    font-size: 0.75rem;
+    color: #8696a0;
+    min-width: 35px;
+    text-align: right;
+}
+
+@media (max-width: 768px) {
+    .audio-player {
+        min-width: 150px;
+        padding: 6px 10px;
+    }
+    
+    .audio-play-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 0.9rem;
+    }
+}

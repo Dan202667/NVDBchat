@@ -20,18 +20,62 @@
         
         {% block header %}
         <div class="app-header">
-            <h1>NVDBchat</h1>
+            <div class="header-left">
+                <button class="menu-btn" onclick="toggleMenu()">☰</button>
+                <h1>NVDBchat</h1>
+            </div>
             <div>
                 {% if session.user_id %}
-                    <a href="{{ url_for('chats') }}">Чаты</a>
-                    <a href="{{ url_for('profile') }}">Профиль</a>
+                    <span style="color:#8696a0; margin-right:15px;">{{ session.username }}</span>
                     <a href="{{ url_for('logout') }}">Выйти</a>
                 {% endif %}
+            </div>
+        </div>
+        
+        <!-- Меню-бургер -->
+        <div id="sideMenu" class="side-menu">
+            <div class="side-menu-header">
+                <h3>Меню</h3>
+                <button class="close-menu" onclick="toggleMenu()">✕</button>
+            </div>
+            <div class="side-menu-content">
+                <a href="{{ url_for('profile') }}">👤 Профиль</a>
+                <a href="{{ url_for('chats') }}">💬 Чаты</a>
+                <div class="menu-divider"></div>
+                <div class="menu-item">
+                    <span>🎨 Тема</span>
+                    <div class="theme-switch">
+                        <button onclick="setTheme('dark')" class="theme-btn">🌙 Тёмная</button>
+                        <button onclick="setTheme('light')" class="theme-btn">☀️ Светлая</button>
+                    </div>
+                </div>
             </div>
         </div>
         {% endblock %}
         
         {% block content %}{% endblock %}
     </div>
+    
+    <script>
+        function toggleMenu() {
+            const menu = document.getElementById('sideMenu');
+            menu.classList.toggle('open');
+        }
+        
+        function setTheme(theme) {
+            localStorage.setItem('theme', theme);
+            if (theme === 'light') {
+                document.body.classList.add('light-theme');
+            } else {
+                document.body.classList.remove('light-theme');
+            }
+        }
+        
+        // Загрузка сохранённой темы
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'light') {
+            document.body.classList.add('light-theme');
+        }
+    </script>
 </body>
 </html>
