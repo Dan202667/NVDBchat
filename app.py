@@ -60,13 +60,13 @@ class Message(db.Model):
     sender_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     content = db.Column(db.Text, nullable=True)
     file_url = db.Column(db.String(300), nullable=True)
-    file_type = db.Column(db.String(20), nullable=True)
+    file_type = db.Column(db.String(20), nullable=True)  # 'image', 'video', 'audio', 'text'
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
-# ==================== СОЗДАНИЕ ТАБЛИЦ ====================
+# ==================== СОЗДАНИЕ ТАБЛИЦ ПРИ ЗАПУСКЕ ====================
 with app.app_context():
     db.create_all()
-    print("✅ Таблицы базы данных созданы")
+    print("✅ Таблицы базы данных созданы (или уже существуют)")
 
 # ==================== ФУНКЦИИ ====================
 ALLOWED_AUDIO_EXTENSIONS = {'mp3', 'm4a', 'ogg', 'wav', 'webm'}
@@ -118,7 +118,6 @@ def get_user_chats(user_id):
         last_msg = Message.query.filter_by(chat_id=chat.id).order_by(Message.timestamp.desc()).first()
         setattr(chat, 'display_name', display_name)
         setattr(chat, 'last_message', last_msg)
-        setattr(chat, 'unread_count', 0)  # Пока убрали подсчёт
         result.append(chat)
 
     result.sort(key=lambda c: c.last_message.timestamp if c.last_message else datetime(1970, 1, 1), reverse=True)
