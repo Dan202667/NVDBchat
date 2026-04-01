@@ -25,6 +25,8 @@ body {
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid #2a3942;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .app-header h1 {
@@ -35,11 +37,17 @@ body {
 .app-header a {
     color: #8696a0;
     text-decoration: none;
-    margin-left: 15px;
+    margin-left: 12px;
     font-size: 0.85rem;
 }
 
 /* Страница чатов */
+.chats-layout {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 56px);
+}
+
 .chats-sidebar {
     width: 100%;
     background: #111b21;
@@ -147,6 +155,7 @@ body {
     display: flex;
     align-items: center;
     border-bottom: 1px solid #2a3942;
+    flex-shrink: 0;
 }
 
 .chat-header .chat-avatar {
@@ -229,10 +238,13 @@ body {
     gap: 8px;
     align-items: center;
     border-top: 1px solid #2a3942;
+    flex-shrink: 0;
+    flex-wrap: nowrap;
 }
 
 .message-form input[type="text"] {
     flex: 1;
+    min-width: 0;
     padding: 10px 12px;
     background: #2a3942;
     border: 1px solid #3b4a54;
@@ -245,21 +257,22 @@ body {
     background: #00a884;
     color: white;
     border: none;
-    padding: 10px 16px;
+    padding: 8px 14px;
     border-radius: 20px;
     cursor: pointer;
     font-weight: 600;
     font-size: 0.85rem;
+    white-space: nowrap;
 }
 
 .message-form button[type="button"] {
     background: #3b4a54;
-    padding: 10px 12px;
+    padding: 8px 12px;
 }
 
 .record-btn {
     background: #3b4a54;
-    padding: 10px 12px;
+    padding: 8px 12px;
 }
 
 .record-btn.recording {
@@ -385,6 +398,7 @@ audio {
     font-weight: 600;
 }
 
+/* Флеш-сообщения */
 .flashes {
     list-style: none;
     padding: 10px;
@@ -394,6 +408,23 @@ audio {
     color: #e9edef;
 }
 
+/* Модальные окна (для входа/регистрации) */
+.forms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 30px;
+    justify-content: center;
+    padding: 20px;
+}
+
+.register, .login {
+    flex: 1;
+    min-width: 250px;
+    background: #202c33;
+    padding: 20px;
+    border-radius: 16px;
+}
+
 /* Адаптация для телефона */
 @media (max-width: 768px) {
     .app-header h1 {
@@ -401,13 +432,32 @@ audio {
     }
     
     .app-header a {
-        margin-left: 10px;
-        font-size: 0.8rem;
+        margin-left: 8px;
+        font-size: 0.75rem;
     }
     
     .message-bubble {
         max-width: 90%;
         font-size: 0.9rem;
+    }
+    
+    .message-form {
+        padding: 8px 10px;
+        gap: 6px;
+    }
+    
+    .message-form input[type="text"] {
+        font-size: 0.9rem;
+        padding: 8px 10px;
+    }
+    
+    .message-form button {
+        padding: 8px 12px;
+        font-size: 0.8rem;
+    }
+    
+    .message-form button[type="button"] {
+        padding: 8px 10px;
     }
     
     .chat-avatar {
@@ -430,5 +480,10 @@ audio {
         width: 28px;
         height: 28px;
         font-size: 0.8rem;
+    }
+    
+    .forms {
+        flex-direction: column;
+        gap: 20px;
     }
 }

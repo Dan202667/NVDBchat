@@ -1,19 +1,4 @@
 {% extends "base.html" %}
-{% block header %}
-<div class="app-header">
-    <div class="header-left">
-        <button class="menu-btn" onclick="toggleMenu()">☰</button>
-        <h1>NVDBchat</h1>
-    </div>
-    <div>
-        {% if session.user_id %}
-            <span style="color:#8696a0; margin-right:15px;">{{ session.username }}</span>
-            <a href="{{ url_for('logout') }}">Выйти</a>
-        {% endif %}
-    </div>
-</div>
-{% endblock %}
-
 {% block content %}
 <div class="auth-container" style="max-width: 400px;">
     <h2>Мой профиль</h2>
