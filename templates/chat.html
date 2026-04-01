@@ -90,6 +90,14 @@
     var lastMessageId = {{ messages[-1].id if messages else 0 }};
     var messagesDiv = document.getElementById('messages');
     
+    // Функция прокрутки вниз
+    function scrollToBottom() {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+    
+    // Прокручиваем при загрузке
+    scrollToBottom();
+    
     // Элементы
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
@@ -123,6 +131,7 @@
                     appendMessage(data);
                     lastMessageId = data.id;
                     messageInput.value = '';
+                    scrollToBottom();
                 }
             });
         }
@@ -144,6 +153,7 @@
                 if (!data.error) {
                     appendMessage(data);
                     lastMessageId = data.id;
+                    scrollToBottom();
                 }
                 fileInput.value = '';
             });
@@ -166,7 +176,10 @@
                 fetch('/send_message/' + chatId, { method: 'POST', body: formData })
                 .then(response => response.json())
                 .then(data => {
-                    if (!data.error) appendMessage(data);
+                    if (!data.error) {
+                        appendMessage(data);
+                        scrollToBottom();
+                    }
                 });
                 stream.getTracks().forEach(track => track.stop());
                 recordingIndicator.style.display = 'none';
@@ -253,7 +266,7 @@
         
         msgDiv.appendChild(bubble);
         messagesDiv.appendChild(msgDiv);
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        scrollToBottom();
     }
     
     function pollNewMessages() {
@@ -268,6 +281,5 @@
     }
     
     setInterval(pollNewMessages, 3000);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
 </script>
 {% endblock %}
