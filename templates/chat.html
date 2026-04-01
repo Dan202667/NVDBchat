@@ -67,17 +67,20 @@
         {% endfor %}
     </div>
     
-    <form class="message-form" id="messageForm" enctype="multipart/form-data">
-        <input type="text" name="content" placeholder="Введите сообщение..." autocomplete="off" id="messageInput">
-        <input type="file" name="file" accept="image/*,video/*,audio/*" style="display: none;" id="fileInput">
-        <button type="button" onclick="startRecording()" id="recordBtn" class="record-btn">🎙️</button>
-        <button type="button" onclick="document.getElementById('fileInput').click();" style="background: #3b4a54; padding: 12px;">📎</button>
-        <button type="submit">Отправить</button>
-    </form>
+    <div class="message-input-area">
+        <div class="input-row">
+            <input type="text" id="messageInput" placeholder="Введите сообщение...">
+            <button id="sendBtn">Отправить</button>
+        </div>
+        <div class="action-buttons">
+            <button id="recordBtn">🎙️</button>
+            <button id="attachBtn">📎</button>
+        </div>
+    </div>
     
-    <div id="recordingIndicator" style="display: none; padding: 10px; background: #2a3942; border-radius: 8px; margin: 10px; text-align: center;">
+    <div id="recordingIndicator" style="display: none;">
         🔴 Идёт запись... <span id="recordTimer">0:00</span>
-        <button type="button" onclick="stopRecording()" style="margin-left: 10px; background: #ff4444;">Остановить</button>
+        <button onclick="stopRecording()">Остановить</button>
     </div>
 </div>
 
@@ -87,45 +90,104 @@
     var lastMessageId = {{ messages[-1].id if messages else 0 }};
     var messagesDiv = document.getElementById('messages');
     
+    // Элементы
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const recordBtn = document.getElementById('recordBtn');
+    const attachBtn = document.getElementById('attachBtn');
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*,video/*,audio/*';
+    fileInput.style.display = 'none';
+    document.body.appendChild(fileInput);
+    
     let mediaRecorder;
     let audioChunks = [];
     let recordingTimer;
     let seconds = 0;
+    const recordingIndicator = document.getElementById('recordingIndicator');
+    const recordTimerSpan = document.getElementById('recordTimer');
     
+    // Отправка текста
+    sendBtn.addEventListener('click', () => {
+        const content = messageInput.value.trim();
+        if (content) {
+            fetch('/send_message/' + chatId, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'content=' + encodeURIComponent(content)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.error) {
+                    appendMessage(data);
+                    lastMessageId = data.id;
+                    messageInput.value = '';
+                }
+            });
+        }
+    });
+    
+    // Прикрепление файла
+    attachBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+        const file = fileInput.files[0];
+        if (file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            fetch('/send_message/' + chatId, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.error) {
+                    appendMessage(data);
+                    lastMessageId = data.id;
+                }
+                fileInput.value = '';
+            });
+        }
+    });
+    
+    // Запись голоса
     async function startRecording() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             mediaRecorder = new MediaRecorder(stream);
             audioChunks = [];
             
-            mediaRecorder.ondataavailable = event => {
-                audioChunks.push(event.data);
-            };
-            
+            mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
             mediaRecorder.onstop = () => {
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                const file = new File([audioBlob], 'voice_message.webm', { type: 'audio/webm' });
-                sendAudioFile(file);
+                const file = new File([audioBlob], 'voice.webm', { type: 'audio/webm' });
+                const formData = new FormData();
+                formData.append('file', file);
+                fetch('/send_message/' + chatId, { method: 'POST', body: formData })
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.error) appendMessage(data);
+                });
                 stream.getTracks().forEach(track => track.stop());
-                document.getElementById('recordingIndicator').style.display = 'none';
+                recordingIndicator.style.display = 'none';
                 clearInterval(recordingTimer);
                 seconds = 0;
-                document.getElementById('recordTimer').innerText = '0:00';
-                document.getElementById('recordBtn').style.background = '';
+                recordTimerSpan.innerText = '0:00';
+                recordBtn.style.background = '';
             };
             
             mediaRecorder.start();
-            document.getElementById('recordingIndicator').style.display = 'flex';
-            document.getElementById('recordBtn').style.background = '#ff4444';
+            recordingIndicator.style.display = 'flex';
+            recordBtn.style.background = '#ff4444';
             
             recordingTimer = setInterval(() => {
                 seconds++;
                 const mins = Math.floor(seconds / 60);
                 const secs = seconds % 60;
-                document.getElementById('recordTimer').innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
+                recordTimerSpan.innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
             }, 1000);
         } catch (err) {
-            alert('Не удалось получить доступ к микрофону: ' + err.message);
+            alert('Микрофон не доступен');
         }
     }
     
@@ -135,53 +197,39 @@
         }
     }
     
-    function sendAudioFile(file) {
-        const formData = new FormData();
-        formData.append('file', file);
-        fetch('/send_message/' + chatId, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                alert(data.error);
-                return;
-            }
-            appendMessage(data);
-            lastMessageId = data.id;
-        })
-        .catch(err => console.error('Error:', err));
-    }
+    recordBtn.addEventListener('click', () => {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            stopRecording();
+        } else {
+            startRecording();
+        }
+    });
     
     function appendMessage(msg) {
         var msgDiv = document.createElement('div');
         msgDiv.className = 'message-wrapper ' + (msg.sender_id == currentUserId ? 'my-message' : 'other-message');
-        msgDiv.id = 'msg-' + msg.id;
-
         var bubble = document.createElement('div');
         bubble.className = 'message-bubble';
-
+        
         if (msg.sender_id != currentUserId && {{ 'true' if chat.type == 'group' else 'false' }}) {
             var senderDiv = document.createElement('div');
             senderDiv.className = 'message-sender';
             senderDiv.textContent = msg.sender_name;
             bubble.appendChild(senderDiv);
         }
-
+        
         if (msg.file_type === 'image') {
             var img = document.createElement('img');
             img.src = msg.file_url;
             img.style.maxWidth = '200px';
             img.style.borderRadius = '8px';
             img.style.cursor = 'pointer';
-            img.onclick = function() { window.open(this.src, '_blank'); };
+            img.onclick = () => window.open(img.src);
             bubble.appendChild(img);
         } else if (msg.file_type === 'video') {
             var video = document.createElement('video');
             video.controls = true;
             video.style.maxWidth = '200px';
-            video.style.borderRadius = '8px';
             var source = document.createElement('source');
             source.src = msg.file_url;
             video.appendChild(source);
@@ -190,48 +238,24 @@
             var audio = document.createElement('audio');
             audio.controls = true;
             audio.style.maxWidth = '200px';
-            audio.style.borderRadius = '8px';
             var source = document.createElement('source');
             source.src = msg.file_url;
             audio.appendChild(source);
             bubble.appendChild(audio);
         } else {
-            var contentDiv = document.createElement('div');
-            contentDiv.textContent = msg.content;
-            bubble.appendChild(contentDiv);
+            bubble.appendChild(document.createTextNode(msg.content));
         }
-
+        
         var timeDiv = document.createElement('div');
         timeDiv.className = 'message-time';
         timeDiv.textContent = msg.timestamp;
         bubble.appendChild(timeDiv);
-
+        
         msgDiv.appendChild(bubble);
         messagesDiv.appendChild(msgDiv);
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
-
-    document.getElementById('messageForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        var formData = new FormData(this);
-        fetch('/send_message/' + chatId, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                alert(data.error);
-                return;
-            }
-            appendMessage(data);
-            lastMessageId = data.id;
-            document.getElementById('messageInput').value = '';
-            document.getElementById('fileInput').value = '';
-        })
-        .catch(err => console.error('Error:', err));
-    });
-
+    
     function pollNewMessages() {
         fetch('/get_new_messages/' + chatId + '?last_id=' + lastMessageId)
         .then(response => response.json())
@@ -240,12 +264,10 @@
                 appendMessage(msg);
                 lastMessageId = msg.id;
             });
-        })
-        .catch(err => console.error('Poll error:', err));
+        });
     }
-
-    setInterval(pollNewMessages, 3000);
     
+    setInterval(pollNewMessages, 3000);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 </script>
 {% endblock %}

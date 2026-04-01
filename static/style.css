@@ -574,3 +574,162 @@ audio {
         padding: 20px;
     }
 }
+/* Фикс для формы отправки — кнопки не уезжают */
+.message-form {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: #202c33;
+    border-top: 1px solid #2a3942;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.message-form input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 12px;
+    background: #2a3942;
+    border: 1px solid #3b4a54;
+    border-radius: 20px;
+    color: #e9edef;
+    font-size: 0.9rem;
+}
+
+.message-form button {
+    flex-shrink: 0;
+    background: #00a884;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.message-form button[type="button"] {
+    background: #3b4a54;
+    padding: 8px 12px;
+    flex-shrink: 0;
+}
+
+.record-btn, .attach-btn {
+    flex-shrink: 0;
+}
+
+/* Для телефонов */
+@media (max-width: 768px) {
+    .message-form {
+        padding: 8px 10px;
+        gap: 6px;
+    }
+    
+    .message-form button {
+        padding: 6px 12px;
+        font-size: 0.8rem;
+    }
+    
+    .message-form button[type="button"] {
+        padding: 6px 10px;
+    }
+    
+    .message-form input[type="text"] {
+        font-size: 0.85rem;
+        padding: 8px 10px;
+    }
+}
+/* Новая структура формы отправки */
+.message-input-area {
+    background: #202c33;
+    border-top: 1px solid #2a3942;
+    padding: 10px 12px;
+}
+
+.input-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.input-row input {
+    flex: 1;
+    padding: 10px 12px;
+    background: #2a3942;
+    border: 1px solid #3b4a54;
+    border-radius: 20px;
+    color: #e9edef;
+    font-size: 0.9rem;
+}
+
+.input-row input:focus {
+    outline: none;
+    border-color: #00a884;
+}
+
+.input-row button {
+    background: #00a884;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.action-buttons button {
+    background: #3b4a54;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 1rem;
+    color: white;
+}
+
+#recordingIndicator {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: #2a3942;
+    border-radius: 30px;
+    margin: 8px 12px;
+    padding: 8px 12px;
+    color: #ff4444;
+}
+
+#recordingIndicator button {
+    background: #ff4444;
+    color: white;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+}
+
+@media (max-width: 768px) {
+    .message-input-area {
+        padding: 8px 10px;
+    }
+    .input-row input {
+        font-size: 0.85rem;
+        padding: 8px 10px;
+    }
+    .input-row button {
+        padding: 6px 12px;
+        font-size: 0.8rem;
+    }
+    .action-buttons button {
+        padding: 6px 10px;
+    }
+}
