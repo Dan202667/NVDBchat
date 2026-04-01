@@ -6,6 +6,7 @@ import cloudinary.uploader
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+import requests
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-change-in-production'
@@ -20,6 +21,35 @@ cloudinary.config(
     api_key=os.environ.get('CLOUDINARY_API_KEY', '816413685482328'),
     api_secret=os.environ.get('CLOUDINARY_API_SECRET', 'xf42h1mQQKprlwl0dujXHUpX7Ow')
 )
+
+# Настройка OneSignal
+ONESIGNAL_APP_ID = "effc2b7e-2a19-4666-a270-4f413081d020"
+ONESIGNAL_REST_API_KEY = os.environ.get('ONESIGNAL_REST_API_KEY', '')
+
+def send_onesignal_notification(user_id, title, body):
+    """Отправляет уведомление через OneSignal"""
+    if not ONESIGNAL_REST_API_KEY:
+        print("⚠️ OneSignal REST API Key не настроен")
+        return
+    
+    try:
+        response = requests.post(
+            "https://onesignal.com/api/v1/notifications",
+            headers={
+                "Authorization": f"Basic {ONESIGNAL_REST_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "app_id": ONESIGNAL_APP_ID,
+                "include_external_user_ids": [str(user_id)],
+                "headings": {"en": title},
+                "contents": {"en": body},
+                "data": {"chat_id": "0"}
+            }
+        )
+        print(f"OneSignal ответ: {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"Ошибка отправки уведомления: {e}")
 
 db = SQLAlchemy(app)
 
@@ -328,6 +358,18 @@ def send_message(chat_id):
             db.session.add(msg)
             db.session.commit()
             sender = User.query.get(msg.sender_id)
+            
+            # Отправляем уведомление получателю
+            if msg.sender_id != session['user_id']:
+                participants = ChatParticipant.query.filter(
+                    ChatParticipant.chat_id == chat_id,
+                    ChatParticipant.user_id != msg.sender_id
+                ).first()
+                if participants:
+                    title = "📩 Новое сообщение"
+                    body = content[:50] + ("..." if content and len(content) > 50 else "Файл")
+                    send_onesignal_notification(participants.user_id, title, body)
+            
             return jsonify({
                 'id': msg.id,
                 'content': msg.content,
@@ -344,6 +386,18 @@ def send_message(chat_id):
         db.session.add(msg)
         db.session.commit()
         sender = User.query.get(msg.sender_id)
+        
+        # Отправляем уведомление получателю
+        if msg.sender_id != session['user_id']:
+            participants = ChatParticipant.query.filter(
+                ChatParticipant.chat_id == chat_id,
+                ChatParticipant.user_id != msg.sender_id
+            ).first()
+            if participants:
+                title = "📩 Новое сообщение"
+                body = content[:50] + ("..." if len(content) > 50 else "")
+                send_onesignal_notification(participants.user_id, title, body)
+        
         return jsonify({
             'id': msg.id,
             'content': msg.content,
