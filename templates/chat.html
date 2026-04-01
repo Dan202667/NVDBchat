@@ -90,13 +90,33 @@
     var lastMessageId = {{ messages[-1].id if messages else 0 }};
     var messagesDiv = document.getElementById('messages');
     
+    // Переменная для отслеживания, листает ли пользователь вверх
+    var isUserScrolling = false;
+    var scrollTimeout;
+    
     // Функция прокрутки вниз
     function scrollToBottom() {
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
     
-    // Прокручиваем при загрузке
-    scrollToBottom();
+    // Проверка, находится ли пользователь внизу
+    function isAtBottom() {
+        return messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 10;
+    }
+    
+    // Отслеживаем, когда пользователь начинает листать
+    messagesDiv.addEventListener('scroll', function() {
+        isUserScrolling = true;
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(function() {
+            isUserScrolling = false;
+        }, 500);
+    });
+    
+    // Прокручиваем вниз при загрузке (только если есть сообщения)
+    if (messagesDiv.scrollHeight > messagesDiv.clientHeight) {
+        scrollToBottom();
+    }
     
     // Элементы
     const messageInput = document.getElementById('messageInput');
@@ -131,6 +151,7 @@
                     appendMessage(data);
                     lastMessageId = data.id;
                     messageInput.value = '';
+                    // После отправки прокручиваем вниз
                     scrollToBottom();
                 }
             });
@@ -266,7 +287,11 @@
         
         msgDiv.appendChild(bubble);
         messagesDiv.appendChild(msgDiv);
-        scrollToBottom();
+        
+        // Прокручиваем вниз только если пользователь не листает вверх
+        if (!isUserScrolling) {
+            scrollToBottom();
+        }
     }
     
     function pollNewMessages() {
