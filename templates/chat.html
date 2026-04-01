@@ -1,20 +1,18 @@
 {% extends "base.html" %}
 {% block header %}
 <div class="app-header">
-    <div class="header-left">
-        <button class="menu-btn" onclick="toggleMenu()">☰</button>
-        <h1>NVDBchat</h1>
-    </div>
+    <h1>NVDBchat</h1>
     <div>
-        <a href="{{ url_for('chats') }}" class="back-btn">← Назад</a>
         <span style="color:#8696a0; margin-right:15px;">{{ session.username }}</span>
+        <a href="{{ url_for('chats') }}">К чатам</a>
+        <a href="{{ url_for('profile') }}">Профиль</a>
         <a href="{{ url_for('logout') }}">Выйти</a>
     </div>
 </div>
 {% endblock %}
 
 {% block content %}
-<div class="chat-area-full">
+<div class="chat-container">
     <div class="chat-header">
         <div class="chat-avatar" style="width: 40px; height: 40px;">
             {% if chat.type == 'group' %}
@@ -56,13 +54,9 @@
                         <source src="{{ msg.file_url }}">
                     </video>
                 {% elif msg.file_type == 'audio' %}
-                    <div class="audio-player" data-url="{{ msg.file_url }}">
-                        <button class="audio-play-btn">▶️</button>
-                        <div class="audio-progress">
-                            <div class="audio-progress-bar"></div>
-                        </div>
-                        <span class="audio-duration">0:00</span>
-                    </div>
+                    <audio controls style="max-width: 200px; border-radius: 8px;">
+                        <source src="{{ msg.file_url }}">
+                    </audio>
                 {% else %}
                     <div>{{ msg.content }}</div>
                 {% endif %}
@@ -93,45 +87,6 @@
     var lastMessageId = {{ messages[-1].id if messages else 0 }};
     var messagesDiv = document.getElementById('messages');
     
-    // ========== АУДИОПЛЕЕР ==========
-    document.querySelectorAll('.audio-player').forEach(container => {
-        const playBtn = container.querySelector('.audio-play-btn');
-        const progressBar = container.querySelector('.audio-progress-bar');
-        const durationSpan = container.querySelector('.audio-duration');
-        let audio = null;
-        let updateInterval = null;
-        
-        playBtn.addEventListener('click', () => {
-            if (audio && !audio.paused) {
-                audio.pause();
-                playBtn.textContent = '▶️';
-                clearInterval(updateInterval);
-            } else {
-                if (!audio) {
-                    const url = container.getAttribute('data-url');
-                    audio = new Audio(url);
-                    audio.addEventListener('loadedmetadata', () => {
-                        const mins = Math.floor(audio.duration / 60);
-                        const secs = Math.floor(audio.duration % 60);
-                        durationSpan.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
-                    });
-                    audio.addEventListener('ended', () => {
-                        playBtn.textContent = '▶️';
-                        progressBar.style.width = '0%';
-                        clearInterval(updateInterval);
-                    });
-                }
-                audio.play();
-                playBtn.textContent = '⏸️';
-                updateInterval = setInterval(() => {
-                    const percent = (audio.currentTime / audio.duration) * 100;
-                    progressBar.style.width = percent + '%';
-                }, 100);
-            }
-        });
-    });
-    
-    // ========== ЗАПИСЬ ГОЛОСА ==========
     let mediaRecorder;
     let audioChunks = [];
     let recordingTimer;
@@ -199,7 +154,6 @@
         .catch(err => console.error('Error:', err));
     }
     
-    // ========== ОТОБРАЖЕНИЕ СООБЩЕНИЙ ==========
     function appendMessage(msg) {
         var msgDiv = document.createElement('div');
         msgDiv.className = 'message-wrapper ' + (msg.sender_id == currentUserId ? 'my-message' : 'other-message');
@@ -233,55 +187,14 @@
             video.appendChild(source);
             bubble.appendChild(video);
         } else if (msg.file_type === 'audio') {
-            var audioPlayer = document.createElement('div');
-            audioPlayer.className = 'audio-player';
-            audioPlayer.setAttribute('data-url', msg.file_url);
-            var playBtn = document.createElement('button');
-            playBtn.className = 'audio-play-btn';
-            playBtn.textContent = '▶️';
-            var progress = document.createElement('div');
-            progress.className = 'audio-progress';
-            var progressBar = document.createElement('div');
-            progressBar.className = 'audio-progress-bar';
-            progress.appendChild(progressBar);
-            var durationSpan = document.createElement('span');
-            durationSpan.className = 'audio-duration';
-            durationSpan.textContent = '0:00';
-            audioPlayer.appendChild(playBtn);
-            audioPlayer.appendChild(progress);
-            audioPlayer.appendChild(durationSpan);
-            bubble.appendChild(audioPlayer);
-            
-            // Добавляем обработчик для нового плеера
-            let audio = null;
-            let updateInterval = null;
-            playBtn.addEventListener('click', () => {
-                if (audio && !audio.paused) {
-                    audio.pause();
-                    playBtn.textContent = '▶️';
-                    clearInterval(updateInterval);
-                } else {
-                    if (!audio) {
-                        audio = new Audio(msg.file_url);
-                        audio.addEventListener('loadedmetadata', () => {
-                            const mins = Math.floor(audio.duration / 60);
-                            const secs = Math.floor(audio.duration % 60);
-                            durationSpan.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
-                        });
-                        audio.addEventListener('ended', () => {
-                            playBtn.textContent = '▶️';
-                            progressBar.style.width = '0%';
-                            clearInterval(updateInterval);
-                        });
-                    }
-                    audio.play();
-                    playBtn.textContent = '⏸️';
-                    updateInterval = setInterval(() => {
-                        const percent = (audio.currentTime / audio.duration) * 100;
-                        progressBar.style.width = percent + '%';
-                    }, 100);
-                }
-            });
+            var audio = document.createElement('audio');
+            audio.controls = true;
+            audio.style.maxWidth = '200px';
+            audio.style.borderRadius = '8px';
+            var source = document.createElement('source');
+            source.src = msg.file_url;
+            audio.appendChild(source);
+            bubble.appendChild(audio);
         } else {
             var contentDiv = document.createElement('div');
             contentDiv.textContent = msg.content;
@@ -333,7 +246,6 @@
 
     setInterval(pollNewMessages, 3000);
     
-    // Скролл вниз при загрузке
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 </script>
 {% endblock %}

@@ -1,15 +1,11 @@
 {% extends "base.html" %}
 {% block header %}
 <div class="app-header">
-    <div class="header-left">
-        <button class="menu-btn" onclick="toggleMenu()">☰</button>
-        <h1>NVDBchat</h1>
-    </div>
+    <h1>NVDBchat</h1>
     <div>
-        {% if session.user_id %}
-            <span style="color:#8696a0; margin-right:15px;">{{ session.username }}</span>
-            <a href="{{ url_for('logout') }}">Выйти</a>
-        {% endif %}
+        <span style="color:#8696a0; margin-right:15px;">{{ session.username }}</span>
+        <a href="{{ url_for('profile') }}">Профиль</a>
+        <a href="{{ url_for('logout') }}">Выйти</a>
     </div>
 </div>
 {% endblock %}
@@ -43,15 +39,10 @@
                 <div class="chat-info">
                     <div class="chat-name">{{ chat.display_name }}</div>
                     <div class="chat-last-msg">
-                        <span>
-                            {% if chat.last_message %}
-                                {{ chat.last_message.content[:30] if chat.last_message.content else 'Файл' }}
-                            {% else %}
-                                Нет сообщений
-                            {% endif %}
-                        </span>
-                        {% if chat.unread_count > 0 %}
-                            <span class="unread-badge">{{ chat.unread_count }}</span>
+                        {% if chat.last_message %}
+                            {{ chat.last_message.content[:30] if chat.last_message.content else 'Файл' }}
+                        {% else %}
+                            Нет сообщений
                         {% endif %}
                     </div>
                 </div>
@@ -63,6 +54,5 @@
             {% endfor %}
         </div>
     </div>
-    <div class="chat-area" style="display: none;"></div>
 </div>
 {% endblock %}
