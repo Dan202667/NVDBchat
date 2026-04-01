@@ -1,32 +1,13 @@
+@"
 {% extends "base.html" %}
 
 {% block content %}
-<div class="auth-container" style="max-width: 800px; margin: 50px auto;">
-    <div style="display: flex; gap: 40px; flex-wrap: wrap; justify-content: center;">
-        <div style="flex: 1; min-width: 250px;">
-            <h2>Регистрация</h2>
-            <form method="POST" action="{{ url_for('register') }}">
-                <div class="form-group">
-                    <input type="text" name="name" placeholder="Имя" required>
-                </div>
-                <div class="form-group">
-                    <input type="password" name="password" placeholder="Пароль" required>
-                </div>
-                <button type="submit" class="btn">Зарегистрироваться</button>
-            </form>
-        </div>
-        <div style="flex: 1; min-width: 250px;">
-            <h2>Вход</h2>
-            <form method="POST" action="{{ url_for('login') }}">
-                <div class="form-group">
-                    <input type="text" name="name" placeholder="Имя" required>
-                </div>
-                <div class="form-group">
-                    <input type="password" name="password" placeholder="Пароль" required>
-                </div>
-                <button type="submit" class="btn">Войти</button>
-            </form>
-        </div>
+<div class="welcome-container">
+    <h1>Добро пожаловать в NVDBchat</h1>
+    <div class="welcome-buttons">
+        <a href="{{ url_for('login_page') }}" class="btn-large">Вход</a>
+        <a href="{{ url_for('register_page') }}" class="btn-large">Регистрация</a>
     </div>
 </div>
 {% endblock %}
+"@ | Out-File -FilePath "templates\index.html" -Encoding utf8

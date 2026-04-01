@@ -128,6 +128,14 @@ def get_user_chats(user_id):
 def index():
     return render_template('index.html')
 
+@app.route('/login_page')
+def login_page():
+    return render_template('login.html')
+
+@app.route('/register_page')
+def register_page():
+    return render_template('register.html')
+
 @app.route('/register', methods=['POST'])
 def register():
     name = request.form['name']
@@ -135,7 +143,7 @@ def register():
     existing = User.query.filter_by(name=name).first()
     if existing:
         flash('Пользователь с таким именем уже существует')
-        return redirect(url_for('index'))
+        return redirect(url_for('register_page'))
     user = User(name=name)
     user.set_password(password)
     db.session.add(user)
@@ -153,7 +161,7 @@ def login():
         session['username'] = user.username
         return redirect(url_for('chats'))
     flash('Неверное имя или пароль')
-    return redirect(url_for('index'))
+    return redirect(url_for('login_page'))
 
 @app.route('/create_profile', methods=['GET', 'POST'])
 def create_profile():
