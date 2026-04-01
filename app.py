@@ -60,13 +60,13 @@ class Message(db.Model):
     sender_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     content = db.Column(db.Text, nullable=True)
     file_url = db.Column(db.String(300), nullable=True)
-    file_type = db.Column(db.String(20), nullable=True)  # 'image', 'video', 'audio', 'text'
+    file_type = db.Column(db.String(20), nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
-# ==================== СОЗДАНИЕ ТАБЛИЦ ПРИ ЗАПУСКЕ ====================
+# ==================== СОЗДАНИЕ ТАБЛИЦ ====================
 with app.app_context():
     db.create_all()
-    print("✅ Таблицы базы данных созданы (или уже существуют)")
+    print("✅ Таблицы базы данных созданы")
 
 # ==================== ФУНКЦИИ ====================
 ALLOWED_AUDIO_EXTENSIONS = {'mp3', 'm4a', 'ogg', 'wav', 'webm'}
@@ -126,14 +126,20 @@ def get_user_chats(user_id):
 # ==================== МАРШРУТЫ ====================
 @app.route('/')
 def index():
+    if 'user_id' in session:
+        return redirect(url_for('chats'))
     return render_template('index.html')
 
 @app.route('/login_page')
 def login_page():
+    if 'user_id' in session:
+        return redirect(url_for('chats'))
     return render_template('login.html')
 
 @app.route('/register_page')
 def register_page():
+    if 'user_id' in session:
+        return redirect(url_for('chats'))
     return render_template('register.html')
 
 @app.route('/register', methods=['POST'])
