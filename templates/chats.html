@@ -17,41 +17,52 @@
             <h2>Чаты</h2>
             <a href="{{ url_for('create_group') }}" class="new-chat-btn">+</a>
         </div>
+        
+        <!-- Папки чатов -->
+        <div class="folders-bar">
+            {% for folder in folders %}
+            <button class="folder-btn" onclick="filterChats('{{ folder }}')">{{ folder }}</button>
+            {% endfor %}
+        </div>
+        
         <div class="search-box">
             <form method="POST" action="{{ url_for('search_user') }}">
                 <input type="text" name="username" placeholder="Поиск по @username..." required>
             </form>
         </div>
-        <div class="chats-list">
+        
+        <div class="chats-list" id="chatsList">
             {% for chat in chats %}
-            <a href="{{ url_for('chat', chat_id=chat.id) }}" class="chat-item">
-                <div class="chat-avatar">
-                    {% if chat.type == 'group' %}
-                        👥
-                    {% else %}
-                        {% if chat.other_avatar %}
-                            <img src="{{ chat.other_avatar }}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
+            <div class="chat-item" data-folder="{{ chat.folder }}" data-chat-id="{{ chat.id }}">
+                <a href="{{ url_for('chat', chat_id=chat.id) }}" style="text-decoration: none; color: inherit; display: flex; align-items: center; width: 100%;">
+                    <div class="chat-avatar">
+                        {% if chat.type == 'group' %}
+                            👥
                         {% else %}
-                            👤
-                        {% endif %}
-                    {% endif %}
-                </div>
-                <div class="chat-info">
-                    <div class="chat-name">
-                        {{ chat.display_name }}
-                        {% if chat.type == 'private' and chat.other_online %}
-                            <span class="online-dot">🟢</span>
+                            {% if chat.other_avatar %}
+                                <img src="{{ chat.other_avatar }}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
+                            {% else %}
+                                👤
+                            {% endif %}
                         {% endif %}
                     </div>
-                    <div class="chat-last-msg">
-                        {% if chat.last_message %}
-                            {{ chat.last_message.content[:30] if chat.last_message.content else 'Файл' }}
-                        {% else %}
-                            Нет сообщений
-                        {% endif %}
+                    <div class="chat-info">
+                        <div class="chat-name">{{ chat.display_name }}</div>
+                        <div class="chat-last-msg">
+                            {% if chat.last_message %}
+                                {{ chat.last_message.content[:30] if chat.last_message.content else 'Файл' }}
+                            {% else %}
+                                Нет сообщений
+                            {% endif %}
+                        </div>
                     </div>
-                </div>
-            </a>
+                </a>
+                <select class="folder-select" data-chat-id="{{ chat.id }}" onchange="changeFolder(this, {{ chat.id }})">
+                    {% for folder in folders %}
+                    <option value="{{ folder }}" {% if chat.folder == folder %}selected{% endif %}>{{ folder }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             {% else %}
             <div style="padding: 20px; text-align: center; color: #8696a0;">
                 У вас пока нет чатов. Начните поиск!
@@ -60,4 +71,31 @@
         </div>
     </div>
 </div>
+
+<script>
+    function filterChats(folder) {
+        document.querySelectorAll('.chat-item').forEach(item => {
+            if (item.getAttribute('data-folder') === folder || folder === 'Все') {
+                item.style.display = 'flex';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    }
+    
+    function changeFolder(select, chatId) {
+        var folder = select.value;
+        fetch('/update_chat_folder/' + chatId, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder: folder })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                location.reload();
+            }
+        });
+    }
+</script>
 {% endblock %}
