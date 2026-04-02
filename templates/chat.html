@@ -107,19 +107,19 @@
     var lastMessageId = {{ messages[-1].id if messages else 0 }};
     var messagesDiv = document.getElementById('messages');
     
-<<<<<<< HEAD
-=======
-    // Функция прокрутки вниз
->>>>>>> c0ebe1a5efa97f254a944ab73847418fe447d822
+    // Прокрутка вниз
     function scrollToBottom() {
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
     scrollToBottom();
     
-<<<<<<< HEAD
-    // Функция редактирования сообщения
-    function editMessage(msgId) {
+    // ========== РЕДАКТИРОВАНИЕ СООБЩЕНИЯ ==========
+    window.editMessage = function(msgId) {
         var msgDiv = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .message-text`);
+        if (!msgDiv) {
+            alert("Не удалось найти текст сообщения");
+            return;
+        }
         var oldText = msgDiv.innerText;
         var newText = prompt("Редактировать сообщение:", oldText);
         if (newText && newText.trim() !== oldText) {
@@ -132,51 +132,56 @@
             .then(data => {
                 if (data.status === 'ok') {
                     msgDiv.innerText = data.content;
-                    var editedBadge = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .edited-badge`);
-                    if (!editedBadge) {
-                        var timeDiv = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .message-time`);
+                    // Добавляем метку "ред.", если её нет
+                    var bubble = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .message-content`);
+                    if (!bubble.querySelector('.edited-badge')) {
                         var badge = document.createElement('span');
                         badge.className = 'edited-badge';
                         badge.innerText = '(ред.)';
-                        timeDiv.parentElement.appendChild(badge);
+                        bubble.appendChild(badge);
                     }
+                } else {
+                    alert("Ошибка: " + (data.error || "Не удалось редактировать"));
                 }
-            });
+            })
+            .catch(err => console.error('Error:', err));
         }
-    }
+    };
     
-    // Функция удаления сообщения
-    function deleteMessage(msgId) {
+    // ========== УДАЛЕНИЕ СООБЩЕНИЯ ==========
+    window.deleteMessage = function(msgId) {
         if (confirm("Удалить это сообщение?")) {
             fetch('/delete_message/' + msgId, {method: 'POST'})
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'ok') {
                     document.querySelector(`.message-wrapper[data-msg-id="${msgId}"]`).remove();
+                } else {
+                    alert("Ошибка: " + (data.error || "Не удалось удалить"));
                 }
-            });
+            })
+            .catch(err => console.error('Error:', err));
         }
-    }
-=======
-    // Прокручиваем при загрузке
-    scrollToBottom();
->>>>>>> c0ebe1a5efa97f254a944ab73847418fe447d822
+    };
     
-    // Функция удаления чата
-    function deleteChat() {
+    // ========== УДАЛЕНИЕ ЧАТА ==========
+    window.deleteChat = function() {
         if (confirm("Удалить весь чат? Восстановить будет невозможно!")) {
             fetch('/delete_chat/' + chatId, {method: 'POST'})
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'ok') {
                     window.location.href = '/chats';
+                } else {
+                    alert("Ошибка: " + (data.error || "Не удалось удалить чат"));
                 }
-            });
+            })
+            .catch(err => console.error('Error:', err));
         }
-    }
+    };
     
-    // Функция добавления реакции
-    function toggleReaction(msgId, emoji) {
+    // ========== РЕАКЦИИ ==========
+    window.toggleReaction = function(msgId, emoji) {
         fetch('/add_reaction/' + msgId, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -185,10 +190,11 @@
         .then(response => response.json())
         .then(data => {
             updateReactionsDisplay(msgId, data.reactions);
-        });
-    }
+        })
+        .catch(err => console.error('Error:', err));
+    };
     
-    function showReactionPicker(msgId) {
+    window.showReactionPicker = function(msgId) {
         var emojis = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉', '💯'];
         var picker = document.createElement('div');
         picker.className = 'reaction-picker';
@@ -204,7 +210,7 @@
         var btn = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .add-reaction-btn`);
         btn.parentElement.appendChild(picker);
         setTimeout(() => picker.remove(), 3000);
-    }
+    };
     
     function updateReactionsDisplay(msgId, reactions) {
         var container = document.getElementById('reactions-' + msgId);
@@ -223,9 +229,10 @@
         container.appendChild(addBtn);
     }
     
-    // Отправка текста
+    // ========== ОТПРАВКА СООБЩЕНИЙ ==========
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
+    
     sendBtn.addEventListener('click', () => {
         const content = messageInput.value.trim();
         if (content) {
@@ -236,17 +243,20 @@
             })
             .then(response => response.json())
             .then(data => {
-                if (!data.error) {
-                    appendMessage(data);
-                    lastMessageId = data.id;
-                    messageInput.value = '';
-                    scrollToBottom();
+                if (data.error) {
+                    alert(data.error);
+                    return;
                 }
-            });
+                appendMessage(data);
+                lastMessageId = data.id;
+                messageInput.value = '';
+                scrollToBottom();
+            })
+            .catch(err => console.error('Error:', err));
         }
     });
     
-    // Прикрепление файла
+    // ========== ПРИКРЕПЛЕНИЕ ФАЙЛОВ ==========
     const attachBtn = document.getElementById('attachBtn');
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
@@ -263,17 +273,20 @@
             fetch('/send_message/' + chatId, { method: 'POST', body: formData })
             .then(response => response.json())
             .then(data => {
-                if (!data.error) {
-                    appendMessage(data);
-                    lastMessageId = data.id;
-                    scrollToBottom();
+                if (data.error) {
+                    alert(data.error);
+                    return;
                 }
+                appendMessage(data);
+                lastMessageId = data.id;
+                scrollToBottom();
                 fileInput.value = '';
-            });
+            })
+            .catch(err => console.error('Error:', err));
         }
     });
     
-    // Запись голоса
+    // ========== ЗАПИСЬ ГОЛОСА ==========
     let mediaRecorder, audioChunks = [], recordingTimer, seconds = 0;
     const recordBtn = document.getElementById('recordBtn');
     const recordingIndicator = document.getElementById('recordingIndicator');
@@ -292,7 +305,14 @@
                 formData.append('file', file);
                 fetch('/send_message/' + chatId, { method: 'POST', body: formData })
                 .then(response => response.json())
-                .then(data => { if (!data.error) { appendMessage(data); scrollToBottom(); } });
+                .then(data => {
+                    if (data.error) {
+                        alert(data.error);
+                        return;
+                    }
+                    appendMessage(data);
+                    scrollToBottom();
+                });
                 stream.getTracks().forEach(track => track.stop());
                 recordingIndicator.style.display = 'none';
                 clearInterval(recordingTimer);
@@ -309,7 +329,9 @@
                 const secs = seconds % 60;
                 recordTimerSpan.innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
             }, 1000);
-        } catch (err) { alert('Микрофон не доступен'); }
+        } catch (err) {
+            alert('Микрофон не доступен');
+        }
     }
     
     function stopRecording() {
@@ -321,6 +343,7 @@
         else startRecording();
     });
     
+    // ========== ДОБАВЛЕНИЕ НОВЫХ СООБЩЕНИЙ ==========
     function appendMessage(msg) {
         var msgDiv = document.createElement('div');
         msgDiv.className = 'message-wrapper ' + (msg.sender_id == currentUserId ? 'my-message' : 'other-message');
@@ -414,12 +437,10 @@
         
         msgDiv.appendChild(bubble);
         messagesDiv.appendChild(msgDiv);
-<<<<<<< HEAD
-=======
         scrollToBottom();
->>>>>>> c0ebe1a5efa97f254a944ab73847418fe447d822
     }
     
+    // ========== ОПРОС НОВЫХ СООБЩЕНИЙ ==========
     function pollNewMessages() {
         fetch('/get_new_messages/' + chatId + '?last_id=' + lastMessageId)
         .then(response => response.json())
@@ -429,7 +450,8 @@
                 lastMessageId = msg.id;
             });
             scrollToBottom();
-        });
+        })
+        .catch(err => console.error('Poll error:', err));
     }
     setInterval(pollNewMessages, 3000);
 </script>
