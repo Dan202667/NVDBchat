@@ -456,7 +456,7 @@ def admin_users():
     if 'user_id' not in session:
         return redirect(url_for('index'))
     user = User.query.get(session['user_id'])
-    if not user or user.username != 'admin':
+    if not user or user.username != 'Dan':
         flash('Доступ запрещён')
         return redirect(url_for('chats'))
     users = User.query.all()
