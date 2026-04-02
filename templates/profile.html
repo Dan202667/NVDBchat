@@ -35,7 +35,12 @@
         </div>
     </div>
     
-    <a href="{{ url_for('chats') }}" class="btn" style="margin-top: 20px; display: block; text-align: center;">К чатам</a>
+    <!-- Кнопка админ-панели (только для Dan) -->
+    {% if user.username == 'Dan' %}
+    <a href="{{ url_for('admin_users') }}" class="btn" style="background: #ff4444; margin-top: 15px; display: block; text-align: center;">👑 Админ панель</a>
+    {% endif %}
+    
+    <a href="{{ url_for('chats') }}" class="btn" style="margin-top: 15px; display: block; text-align: center;">К чатам</a>
 </div>
 
 <script>
