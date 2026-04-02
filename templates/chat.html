@@ -107,11 +107,30 @@
     var lastMessageId = {{ messages[-1].id if messages else 0 }};
     var messagesDiv = document.getElementById('messages');
     
-    // Прокрутка вниз
-    function scrollToBottom() {
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    // Флаг для отслеживания, листает ли пользователь вверх
+    var isUserScrolling = false;
+    var scrollTimeout;
+    
+    // Отслеживаем скролл пользователя
+    messagesDiv.addEventListener('scroll', function() {
+        isUserScrolling = true;
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(function() {
+            isUserScrolling = false;
+        }, 500);
+    });
+    
+    // Функция прокрутки вниз (только если пользователь не листает)
+    function scrollToBottomIfNeeded() {
+        if (!isUserScrolling) {
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
     }
-    scrollToBottom();
+    
+    // Прокрутка вниз при загрузке
+    setTimeout(function() {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }, 100);
     
     // ========== РЕДАКТИРОВАНИЕ СООБЩЕНИЯ ==========
     window.editMessage = function(msgId) {
@@ -132,7 +151,6 @@
             .then(data => {
                 if (data.status === 'ok') {
                     msgDiv.innerText = data.content;
-                    // Добавляем метку "ред.", если её нет
                     var bubble = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .message-content`);
                     if (!bubble.querySelector('.edited-badge')) {
                         var badge = document.createElement('span');
@@ -208,12 +226,15 @@
             picker.appendChild(btn);
         });
         var btn = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .add-reaction-btn`);
-        btn.parentElement.appendChild(picker);
-        setTimeout(() => picker.remove(), 3000);
+        if (btn) {
+            btn.parentElement.appendChild(picker);
+            setTimeout(() => picker.remove(), 3000);
+        }
     };
     
     function updateReactionsDisplay(msgId, reactions) {
         var container = document.getElementById('reactions-' + msgId);
+        if (!container) return;
         container.innerHTML = '';
         reactions.forEach(r => {
             var span = document.createElement('span');
@@ -250,7 +271,7 @@
                 appendMessage(data);
                 lastMessageId = data.id;
                 messageInput.value = '';
-                scrollToBottom();
+                scrollToBottomIfNeeded();
             })
             .catch(err => console.error('Error:', err));
         }
@@ -279,7 +300,7 @@
                 }
                 appendMessage(data);
                 lastMessageId = data.id;
-                scrollToBottom();
+                scrollToBottomIfNeeded();
                 fileInput.value = '';
             })
             .catch(err => console.error('Error:', err));
@@ -311,7 +332,7 @@
                         return;
                     }
                     appendMessage(data);
-                    scrollToBottom();
+                    scrollToBottomIfNeeded();
                 });
                 stream.getTracks().forEach(track => track.stop());
                 recordingIndicator.style.display = 'none';
@@ -389,6 +410,12 @@
             textDiv.className = 'message-text';
             textDiv.textContent = msg.content;
             contentDiv.appendChild(textDiv);
+            if (msg.is_edited) {
+                var badge = document.createElement('span');
+                badge.className = 'edited-badge';
+                badge.innerText = '(ред.)';
+                contentDiv.appendChild(badge);
+            }
         }
         bubble.appendChild(contentDiv);
         
@@ -437,7 +464,7 @@
         
         msgDiv.appendChild(bubble);
         messagesDiv.appendChild(msgDiv);
-        scrollToBottom();
+        scrollToBottomIfNeeded();
     }
     
     // ========== ОПРОС НОВЫХ СООБЩЕНИЙ ==========
@@ -449,7 +476,6 @@
                 appendMessage(msg);
                 lastMessageId = msg.id;
             });
-            scrollToBottom();
         })
         .catch(err => console.error('Poll error:', err));
     }
