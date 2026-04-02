@@ -52,7 +52,8 @@ class User(db.Model):
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
     is_online = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    chat_folders = db.Column(db.Text, nullable=True)  # JSON папок
+    chat_folders = db.Column(db.Text, nullable=True)
+    onesignal_user_id = db.Column(db.String(300), nullable=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -89,8 +90,8 @@ class Message(db.Model):
     reply_to = db.Column(db.Integer, nullable=True)
     pinned = db.Column(db.Boolean, default=False)
     scheduled_for = db.Column(db.DateTime, nullable=True)
-    delete_at = db.Column(db.DateTime, nullable=True)  # автоудаление
-    views = db.Column(db.Integer, default=0)  # статистика для каналов
+    delete_at = db.Column(db.DateTime, nullable=True)
+    views = db.Column(db.Integer, default=0)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 class MessageReaction(db.Model):
@@ -106,15 +107,15 @@ class Poll(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     message_id = db.Column(db.Integer, db.ForeignKey('messages.id', ondelete='CASCADE'))
     question = db.Column(db.String(500), nullable=False)
-    options = db.Column(db.Text, nullable=False)  # JSON массив
-    votes = db.Column(db.Text, nullable=True)  # JSON объект {option: [user_ids]}
+    options = db.Column(db.Text, nullable=False)
+    votes = db.Column(db.Text, nullable=True)
 
 class StickerPack(db.Model):
     __tablename__ = 'sticker_packs'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     owner_id = db.Column(db.Integer, db.ForeignKey('users.id'))
-    stickers = db.Column(db.Text, nullable=True)  # JSON массив URL
+    stickers = db.Column(db.Text, nullable=True)
 
 with app.app_context():
     db.create_all()
@@ -365,7 +366,7 @@ def send_message(chat_id):
     file = request.files.get('file')
     reply_to = request.form.get('reply_to', type=int) or None
     scheduled_time = request.form.get('scheduled_time')
-    delete_after = request.form.get('delete_after')  # 'hour', 'day', 'week'
+    delete_after = request.form.get('delete_after')
     
     msg = Message(chat_id=chat_id, sender_id=session['user_id'], reply_to=reply_to)
     
@@ -508,7 +509,7 @@ def vote_poll(poll_id):
     poll.votes = json.dumps(votes)
     db.session.commit()
     
-    return jsonify({'status': 'ok', 'votes': {opt: len(votes.get(str(opt), [])) for opt in range(len(json.loads(poll.options)))} })
+    return jsonify({'status': 'ok', 'votes': {opt: len(votes.get(str(opt), [])) for opt in range(len(json.loads(poll.options)))}})
 
 @app.route('/search_messages/<int:chat_id>')
 def search_messages(chat_id):
@@ -628,6 +629,24 @@ def register_token():
         db.session.commit()
         return jsonify({'status': 'ok'})
     return jsonify({'error': 'No token'}), 400
+
+# ==================== ВРЕМЕННЫЙ МАРШРУТ ДЛЯ ОБНОВЛЕНИЯ БД ====================
+@app.route('/fix_db_v2')
+def fix_db_v2():
+    from sqlalchemy import text
+    try:
+        with db.engine.connect() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_folders TEXT DEFAULT NULL"))
+            conn.execute(text("ALTER TABLE chats ADD COLUMN IF NOT EXISTS folder VARCHAR(50) DEFAULT 'Основные'"))
+            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMP DEFAULT NULL"))
+            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS delete_at TIMESTAMP DEFAULT NULL"))
+            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to INTEGER DEFAULT NULL"))
+            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS pinned BOOLEAN DEFAULT FALSE"))
+            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS views INTEGER DEFAULT 0"))
+            conn.commit()
+        return "✅ База данных обновлена! Все новые колонки добавлены."
+    except Exception as e:
+        return f"❌ Ошибка: {e}"
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
