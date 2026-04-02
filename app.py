@@ -27,7 +27,6 @@ ONESIGNAL_APP_ID = "effc2b7e-2a19-4666-a270-4f413081d020"
 ONESIGNAL_REST_API_KEY = os.environ.get('ONESIGNAL_REST_API_KEY', '')
 
 def send_onesignal_notification(user_id, title, body):
-<<<<<<< HEAD
     if not ONESIGNAL_REST_API_KEY:
         return
     try:
@@ -38,31 +37,6 @@ def send_onesignal_notification(user_id, title, body):
         )
     except Exception as e:
         print(f"Ошибка отправки: {e}")
-=======
-    """Отправляет уведомление через OneSignal"""
-    if not ONESIGNAL_REST_API_KEY:
-        print("⚠️ OneSignal REST API Key не настроен")
-        return
-    
-    try:
-        response = requests.post(
-            "https://onesignal.com/api/v1/notifications",
-            headers={
-                "Authorization": f"Basic {ONESIGNAL_REST_API_KEY}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "app_id": ONESIGNAL_APP_ID,
-                "include_external_user_ids": [str(user_id)],
-                "headings": {"en": title},
-                "contents": {"en": body},
-                "data": {"chat_id": "0"}
-            }
-        )
-        print(f"OneSignal ответ: {response.status_code} - {response.text}")
-    except Exception as e:
-        print(f"Ошибка отправки уведомления: {e}")
->>>>>>> c0ebe1a5efa97f254a944ab73847418fe447d822
 
 db = SQLAlchemy(app)
 
@@ -106,9 +80,8 @@ class Message(db.Model):
     content = db.Column(db.Text, nullable=True)
     file_url = db.Column(db.String(300), nullable=True)
     file_type = db.Column(db.String(20), nullable=True)
-<<<<<<< HEAD
     is_edited = db.Column(db.Boolean, default=False)
-    reactions = db.Column(db.Text, nullable=True)  # JSON строка с реакциями
+    reactions = db.Column(db.Text, nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 class MessageReaction(db.Model):
@@ -119,11 +92,6 @@ class MessageReaction(db.Model):
     emoji = db.Column(db.String(10), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-=======
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-
-# ==================== СОЗДАНИЕ ТАБЛИЦ ====================
->>>>>>> c0ebe1a5efa97f254a944ab73847418fe447d822
 with app.app_context():
     db.create_all()
     print("✅ Таблицы базы данных созданы")
@@ -188,10 +156,7 @@ def get_user_chats(user_id):
 @app.route('/')
 def index():
     if 'user_id' in session:
-<<<<<<< HEAD
         update_user_online_status(session['user_id'], True)
-=======
->>>>>>> c0ebe1a5efa97f254a944ab73847418fe447d822
         return redirect(url_for('chats'))
     return render_template('index.html')
 
@@ -341,7 +306,6 @@ def chat(chat_id):
         sender = User.query.get(msg.sender_id)
         msg.sender_name = sender.username or sender.name
         msg.sender_avatar = sender.avatar_url
-        # Получаем реакции для сообщения
         reactions = MessageReaction.query.filter_by(message_id=msg.id).all()
         msg.reactions_list = [{'emoji': r.emoji, 'user_id': r.user_id} for r in reactions]
     other_avatar = None
@@ -376,71 +340,22 @@ def send_message(chat_id):
             db.session.add(msg)
             db.session.commit()
             sender = User.query.get(msg.sender_id)
-<<<<<<< HEAD
             if msg.sender_id != session['user_id']:
                 participants = ChatParticipant.query.filter(ChatParticipant.chat_id == chat_id, ChatParticipant.user_id != msg.sender_id).first()
                 if participants:
                     send_onesignal_notification(participants.user_id, "Новое сообщение", content[:50] if content else "Файл")
             return jsonify({'id': msg.id, 'content': msg.content, 'file_url': msg.file_url, 'file_type': msg.file_type, 'sender_id': msg.sender_id, 'sender_name': sender.username or sender.name, 'timestamp': msg.timestamp.strftime('%H:%M')}), 200
-=======
-            
-            # Отправляем уведомление получателю
-            if msg.sender_id != session['user_id']:
-                participants = ChatParticipant.query.filter(
-                    ChatParticipant.chat_id == chat_id,
-                    ChatParticipant.user_id != msg.sender_id
-                ).first()
-                if participants:
-                    title = "📩 Новое сообщение"
-                    body = content[:50] + ("..." if content and len(content) > 50 else "Файл")
-                    send_onesignal_notification(participants.user_id, title, body)
-            
-            return jsonify({
-                'id': msg.id,
-                'content': msg.content,
-                'file_url': msg.file_url,
-                'file_type': msg.file_type,
-                'sender_id': msg.sender_id,
-                'sender_name': sender.username or sender.name,
-                'timestamp': msg.timestamp.strftime('%H:%M')
-            }), 200
-
->>>>>>> c0ebe1a5efa97f254a944ab73847418fe447d822
     if content.strip():
         msg.content = content
         msg.file_type = 'text'
         db.session.add(msg)
         db.session.commit()
         sender = User.query.get(msg.sender_id)
-<<<<<<< HEAD
         if msg.sender_id != session['user_id']:
             participants = ChatParticipant.query.filter(ChatParticipant.chat_id == chat_id, ChatParticipant.user_id != msg.sender_id).first()
             if participants:
                 send_onesignal_notification(participants.user_id, "Новое сообщение", content[:50] + ("..." if len(content) > 50 else ""))
         return jsonify({'id': msg.id, 'content': msg.content, 'file_type': 'text', 'sender_id': msg.sender_id, 'sender_name': sender.username or sender.name, 'timestamp': msg.timestamp.strftime('%H:%M')}), 200
-=======
-        
-        # Отправляем уведомление получателю
-        if msg.sender_id != session['user_id']:
-            participants = ChatParticipant.query.filter(
-                ChatParticipant.chat_id == chat_id,
-                ChatParticipant.user_id != msg.sender_id
-            ).first()
-            if participants:
-                title = "📩 Новое сообщение"
-                body = content[:50] + ("..." if len(content) > 50 else "")
-                send_onesignal_notification(participants.user_id, title, body)
-        
-        return jsonify({
-            'id': msg.id,
-            'content': msg.content,
-            'file_type': 'text',
-            'sender_id': msg.sender_id,
-            'sender_name': sender.username or sender.name,
-            'timestamp': msg.timestamp.strftime('%H:%M')
-        }), 200
-
->>>>>>> c0ebe1a5efa97f254a944ab73847418fe447d822
     return jsonify({'error': 'Empty message'}), 400
 
 @app.route('/edit_message/<int:message_id>', methods=['POST'])
@@ -485,7 +400,6 @@ def add_reaction(message_id):
         reaction = MessageReaction(message_id=message_id, user_id=session['user_id'], emoji=emoji)
         db.session.add(reaction)
     db.session.commit()
-    # Возвращаем все реакции для сообщения
     reactions = MessageReaction.query.filter_by(message_id=message_id).all()
     result = [{'emoji': r.emoji, 'user_id': r.user_id} for r in reactions]
     return jsonify({'reactions': result})
@@ -494,7 +408,6 @@ def add_reaction(message_id):
 def delete_chat(chat_id):
     if 'user_id' not in session:
         return jsonify({'error': 'Unauthorized'}), 401
-    # Удаляем все сообщения чата, затем самого участника
     Message.query.filter_by(chat_id=chat_id).delete()
     ChatParticipant.query.filter_by(chat_id=chat_id, user_id=session['user_id']).delete()
     db.session.commit()
@@ -509,7 +422,6 @@ def get_new_messages(chat_id):
     result = []
     for msg in messages:
         sender = User.query.get(msg.sender_id)
-        # Получаем реакции
         reactions = MessageReaction.query.filter_by(message_id=msg.id).all()
         reactions_list = [{'emoji': r.emoji, 'user_id': r.user_id} for r in reactions]
         result.append({'id': msg.id, 'content': msg.content, 'file_url': msg.file_url, 'file_type': msg.file_type, 'sender_id': msg.sender_id, 'sender_name': sender.username or sender.name, 'timestamp': msg.timestamp.strftime('%H:%M'), 'is_edited': msg.is_edited, 'reactions': reactions_list})
