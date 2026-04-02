@@ -34,5 +34,16 @@
         
         {% block content %}{% endblock %}
     </div>
+    
+    <!-- OneSignal уведомления -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+        window.OneSignalDeferred = window.OneSignalDeferred || [];
+        OneSignalDeferred.push(async function(OneSignal) {
+            await OneSignal.init({
+                appId: "effc2b7e-2a19-4666-a270-4f413081d020",
+            });
+        });
+    </script>
 </body>
 </html>

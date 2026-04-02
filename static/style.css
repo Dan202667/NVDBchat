@@ -60,6 +60,15 @@ body {
     gap: 30px;
 }
 
+/* Убираем подчёркивание у кнопок */
+.welcome-buttons a {
+    text-decoration: none !important;
+}
+
+.welcome-buttons a:hover {
+    text-decoration: none !important;
+}
+
 .btn-large {
     background: #00a884;
     color: white;
@@ -226,9 +235,11 @@ body {
     display: flex;
     flex-direction: column;
     height: calc(100vh - 56px);
+    overflow: hidden;
 }
 
 .chat-header {
+    flex-shrink: 0;
     padding: 10px 15px;
     background: #202c33;
     display: flex;
@@ -308,16 +319,20 @@ body {
 }
 
 /* ========== ФОРМА ОТПРАВКИ ========== */
-.message-form {
-    padding: 10px 12px;
+.message-input-area {
+    flex-shrink: 0;
     background: #202c33;
-    display: flex;
-    gap: 8px;
-    align-items: center;
     border-top: 1px solid #2a3942;
+    padding: 10px 12px;
 }
 
-.message-form input[type="text"] {
+.input-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.input-row input {
     flex: 1;
     padding: 10px 12px;
     background: #2a3942;
@@ -327,12 +342,12 @@ body {
     font-size: 0.9rem;
 }
 
-.message-form input:focus {
+.input-row input:focus {
     outline: none;
     border-color: #00a884;
 }
 
-.message-form button {
+.input-row button {
     background: #00a884;
     color: white;
     border: none;
@@ -340,13 +355,22 @@ body {
     border-radius: 20px;
     cursor: pointer;
     font-weight: 600;
-    font-size: 0.85rem;
     white-space: nowrap;
 }
 
-.message-form button[type="button"] {
+.action-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.action-buttons button {
     background: #3b4a54;
+    border: none;
     padding: 8px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 1rem;
+    color: white;
 }
 
 .record-btn {
@@ -574,163 +598,160 @@ audio {
         padding: 20px;
     }
 }
-/* Фикс для формы отправки — кнопки не уезжают */
-.message-form {
-    display: flex;
-    flex-wrap: nowrap;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
+
+/* ========== ПЛАВНЫЕ ПЕРЕХОДЫ ========== */
+* {
+    transition: all 0.2s ease-in-out;
+}
+
+.container {
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.message-wrapper {
+    animation: messageAppear 0.2s ease-out;
+}
+
+@keyframes messageAppear {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.my-message .message-wrapper {
+    animation: myMessageAppear 0.2s ease-out;
+}
+
+@keyframes myMessageAppear {
+    from {
+        opacity: 0;
+        transform: translateX(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.chat-item {
+    animation: chatItemAppear 0.2s ease-out;
+    animation-fill-mode: both;
+}
+
+@keyframes chatItemAppear {
+    from {
+        opacity: 0;
+        transform: translateX(-15px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.chat-item:nth-child(1) { animation-delay: 0.05s; }
+.chat-item:nth-child(2) { animation-delay: 0.1s; }
+.chat-item:nth-child(3) { animation-delay: 0.15s; }
+.chat-item:nth-child(4) { animation-delay: 0.2s; }
+.chat-item:nth-child(5) { animation-delay: 0.25s; }
+.chat-item:nth-child(6) { animation-delay: 0.3s; }
+.chat-item:nth-child(7) { animation-delay: 0.35s; }
+.chat-item:nth-child(8) { animation-delay: 0.4s; }
+.chat-item:nth-child(9) { animation-delay: 0.45s; }
+.chat-item:nth-child(10) { animation-delay: 0.5s; }
+
+.modal {
+    transition: opacity 0.2s ease;
+}
+
+.modal-content {
+    animation: modalAppear 0.2s ease-out;
+}
+
+@keyframes modalAppear {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.btn-large, .input-row button, .action-buttons button, #sendBtn, .new-chat-btn, .chat-item, .chat-avatar, .app-header a, .btn {
+    transition: all 0.2s ease;
+}
+
+.btn-large:hover, .input-row button:hover, .action-buttons button:hover, #sendBtn:hover, .new-chat-btn:hover, .chat-item:hover, .app-header a:hover, .btn:hover {
+    transform: scale(1.02);
+    filter: brightness(1.05);
+}
+
+.btn-large:active, .input-row button:active, .action-buttons button:active, #sendBtn:active, .new-chat-btn:active, .btn:active {
+    transform: scale(0.98);
+}
+
+.chat-item:hover {
     background: #202c33;
-    border-top: 1px solid #2a3942;
-    width: 100%;
-    box-sizing: border-box;
+    transform: translateX(5px);
 }
 
-.message-form input[type="text"] {
-    flex: 1;
-    min-width: 0;
-    padding: 10px 12px;
-    background: #2a3942;
-    border: 1px solid #3b4a54;
-    border-radius: 20px;
-    color: #e9edef;
-    font-size: 0.9rem;
+.chat-item:active {
+    transform: translateX(2px);
 }
 
-.message-form button {
-    flex-shrink: 0;
-    background: #00a884;
-    color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 20px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 0.85rem;
-    white-space: nowrap;
+.chat-item:hover .chat-avatar {
+    transform: scale(1.05);
 }
 
-.message-form button[type="button"] {
-    background: #3b4a54;
-    padding: 8px 12px;
-    flex-shrink: 0;
+.flashes {
+    animation: flashAppear 0.3s ease-out;
 }
 
-.record-btn, .attach-btn {
-    flex-shrink: 0;
-}
-
-/* Для телефонов */
-@media (max-width: 768px) {
-    .message-form {
-        padding: 8px 10px;
-        gap: 6px;
+@keyframes flashAppear {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
     }
-    
-    .message-form button {
-        padding: 6px 12px;
-        font-size: 0.8rem;
-    }
-    
-    .message-form button[type="button"] {
-        padding: 6px 10px;
-    }
-    
-    .message-form input[type="text"] {
-        font-size: 0.85rem;
-        padding: 8px 10px;
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }
-/* Новая структура формы отправки */
-.message-input-area {
-    background: #202c33;
-    border-top: 1px solid #2a3942;
-    padding: 10px 12px;
+
+html {
+    scroll-behavior: smooth;
 }
 
-.input-row {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 8px;
+.auth-container {
+    animation: formAppear 0.3s ease-out;
 }
 
-.input-row input {
-    flex: 1;
-    padding: 10px 12px;
-    background: #2a3942;
-    border: 1px solid #3b4a54;
-    border-radius: 20px;
-    color: #e9edef;
-    font-size: 0.9rem;
-}
-
-.input-row input:focus {
-    outline: none;
-    border-color: #00a884;
-}
-
-.input-row button {
-    background: #00a884;
-    color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 20px;
-    cursor: pointer;
-    font-weight: 600;
-    white-space: nowrap;
-}
-
-.action-buttons {
-    display: flex;
-    gap: 8px;
-}
-
-.action-buttons button {
-    background: #3b4a54;
-    border: none;
-    padding: 8px 12px;
-    border-radius: 20px;
-    cursor: pointer;
-    font-size: 1rem;
-    color: white;
-}
-
-#recordingIndicator {
-    display: none;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    background: #2a3942;
-    border-radius: 30px;
-    margin: 8px 12px;
-    padding: 8px 12px;
-    color: #ff4444;
-}
-
-#recordingIndicator button {
-    background: #ff4444;
-    color: white;
-    border: none;
-    padding: 4px 12px;
-    border-radius: 20px;
-    cursor: pointer;
-}
-
-@media (max-width: 768px) {
-    .message-input-area {
-        padding: 8px 10px;
+@keyframes formAppear {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
     }
-    .input-row input {
-        font-size: 0.85rem;
-        padding: 8px 10px;
-    }
-    .input-row button {
-        padding: 6px 12px;
-        font-size: 0.8rem;
-    }
-    .action-buttons button {
-        padding: 6px 10px;
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }
 /* Статус онлайн */

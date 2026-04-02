@@ -107,11 +107,16 @@
     var lastMessageId = {{ messages[-1].id if messages else 0 }};
     var messagesDiv = document.getElementById('messages');
     
+<<<<<<< HEAD
+=======
+    // Функция прокрутки вниз
+>>>>>>> c0ebe1a5efa97f254a944ab73847418fe447d822
     function scrollToBottom() {
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
     scrollToBottom();
     
+<<<<<<< HEAD
     // Функция редактирования сообщения
     function editMessage(msgId) {
         var msgDiv = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .message-text`);
@@ -152,6 +157,10 @@
             });
         }
     }
+=======
+    // Прокручиваем при загрузке
+    scrollToBottom();
+>>>>>>> c0ebe1a5efa97f254a944ab73847418fe447d822
     
     // Функция удаления чата
     function deleteChat() {
@@ -405,6 +414,10 @@
         
         msgDiv.appendChild(bubble);
         messagesDiv.appendChild(msgDiv);
+<<<<<<< HEAD
+=======
+        scrollToBottom();
+>>>>>>> c0ebe1a5efa97f254a944ab73847418fe447d822
     }
     
     function pollNewMessages() {
