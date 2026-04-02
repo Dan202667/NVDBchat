@@ -733,3 +733,115 @@ audio {
         padding: 6px 10px;
     }
 }
+/* Статус онлайн */
+.online-dot {
+    font-size: 0.7rem;
+    margin-left: 5px;
+}
+
+/* Редактирование сообщения */
+.edited-badge {
+    font-size: 0.65rem;
+    color: #8696a0;
+    margin-left: 5px;
+}
+
+/* Кнопки действий с сообщениями */
+.message-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 4px;
+}
+
+.message-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.edit-msg-btn, .delete-msg-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.7rem;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+    padding: 2px;
+}
+
+.edit-msg-btn:hover, .delete-msg-btn:hover {
+    opacity: 1;
+}
+
+/* Реакции */
+.message-reactions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 5px;
+}
+
+.reaction {
+    background: rgba(0, 168, 132, 0.2);
+    border-radius: 20px;
+    padding: 2px 6px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.reaction:hover {
+    background: rgba(0, 168, 132, 0.4);
+}
+
+.add-reaction-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.8rem;
+    opacity: 0.5;
+    padding: 2px 6px;
+}
+
+.add-reaction-btn:hover {
+    opacity: 1;
+}
+
+.reaction-picker {
+    position: absolute;
+    background: #202c33;
+    border-radius: 30px;
+    padding: 5px 10px;
+    display: flex;
+    gap: 8px;
+    z-index: 100;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+.reaction-picker button {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 5px;
+}
+
+.reaction-picker button:hover {
+    transform: scale(1.2);
+}
+
+/* Кнопка удаления чата */
+.delete-chat-btn {
+    background: none;
+    border: none;
+    color: #ff4444;
+    cursor: pointer;
+    font-size: 0.8rem;
+    margin-left: auto;
+    padding: 5px 10px;
+    border-radius: 8px;
+}
+
+.delete-chat-btn:hover {
+    background: rgba(255, 68, 68, 0.2);
+}

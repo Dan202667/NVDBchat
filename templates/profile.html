@@ -19,6 +19,13 @@
         </div>
         <div style="font-size: 1.5rem; font-weight: 600; margin-top: 15px;">{{ user.name }}</div>
         <div style="color: #00a884;">@{{ user.username }}</div>
+        <div style="font-size: 0.8rem; color: #8696a0; margin-top: 5px;">
+            {% if user.is_online %}
+                🟢 Онлайн
+            {% else %}
+                ⚫ Был(а) {{ user.last_seen.strftime('%d.%m.%Y %H:%M') }}
+            {% endif %}
+        </div>
     </div>
     
     <div class="form-group" style="margin-top: 20px;">

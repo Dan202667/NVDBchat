@@ -37,7 +37,12 @@
                     {% endif %}
                 </div>
                 <div class="chat-info">
-                    <div class="chat-name">{{ chat.display_name }}</div>
+                    <div class="chat-name">
+                        {{ chat.display_name }}
+                        {% if chat.type == 'private' and chat.other_online %}
+                            <span class="online-dot">🟢</span>
+                        {% endif %}
+                    </div>
                     <div class="chat-last-msg">
                         {% if chat.last_message %}
                             {{ chat.last_message.content[:30] if chat.last_message.content else 'Файл' }}

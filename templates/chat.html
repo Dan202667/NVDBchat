@@ -31,37 +31,54 @@
                 {% if chat.type == 'group' %}
                     Групповой чат
                 {% else %}
-                    Личный чат
+                    {% if other_online %}
+                        🟢 Онлайн
+                    {% else %}
+                        ⚫ Офлайн
+                    {% endif %}
                 {% endif %}
             </div>
         </div>
+        <button class="delete-chat-btn" onclick="deleteChat()">🗑️ Удалить чат</button>
     </div>
     
     <div class="messages-container" id="messages">
         {% for msg in messages %}
-        <div class="message-wrapper {% if msg.sender_id == session.user_id %}my-message{% else %}other-message{% endif %}" id="msg-{{ msg.id }}">
+        <div class="message-wrapper {% if msg.sender_id == session.user_id %}my-message{% else %}other-message{% endif %}" data-msg-id="{{ msg.id }}">
             <div class="message-bubble">
                 {% if msg.sender_id != session.user_id and chat.type == 'group' %}
                 <div class="message-sender">{{ msg.sender_name }}</div>
                 {% endif %}
                 
-                {% if msg.file_type == 'image' %}
-                    <img src="{{ msg.file_url }}" 
-                         style="max-width: 200px; border-radius: 8px; cursor: pointer;" 
-                         onclick="window.open(this.src, '_blank')">
-                {% elif msg.file_type == 'video' %}
-                    <video controls style="max-width: 200px; border-radius: 8px;">
-                        <source src="{{ msg.file_url }}">
-                    </video>
-                {% elif msg.file_type == 'audio' %}
-                    <audio controls style="max-width: 200px; border-radius: 8px;">
-                        <source src="{{ msg.file_url }}">
-                    </audio>
-                {% else %}
-                    <div>{{ msg.content }}</div>
-                {% endif %}
+                <div class="message-content">
+                    {% if msg.file_type == 'image' %}
+                        <img src="{{ msg.file_url }}" style="max-width: 200px; border-radius: 8px; cursor: pointer;" onclick="window.open(this.src, '_blank')">
+                    {% elif msg.file_type == 'video' %}
+                        <video controls style="max-width: 200px; border-radius: 8px;"><source src="{{ msg.file_url }}"></video>
+                    {% elif msg.file_type == 'audio' %}
+                        <audio controls style="max-width: 200px; border-radius: 8px;"><source src="{{ msg.file_url }}"></audio>
+                    {% else %}
+                        <div class="message-text">{{ msg.content }}</div>
+                        {% if msg.is_edited %}<span class="edited-badge">(ред.)</span>{% endif %}
+                    {% endif %}
+                </div>
                 
-                <div class="message-time">{{ msg.timestamp.strftime('%H:%M') }}</div>
+                <div class="message-footer">
+                    <div class="message-time">{{ msg.timestamp.strftime('%H:%M') }}</div>
+                    <div class="message-actions">
+                        {% if msg.sender_id == session.user_id %}
+                            <button class="edit-msg-btn" onclick="editMessage({{ msg.id }})">✏️</button>
+                            <button class="delete-msg-btn" onclick="deleteMessage({{ msg.id }})">🗑️</button>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="message-reactions" id="reactions-{{ msg.id }}">
+                    {% for r in msg.reactions_list %}
+                        <span class="reaction" onclick="toggleReaction({{ msg.id }}, '{{ r.emoji }}')">{{ r.emoji }}</span>
+                    {% endfor %}
+                    <button class="add-reaction-btn" onclick="showReactionPicker({{ msg.id }})">➕</button>
+                </div>
             </div>
         </div>
         {% endfor %}
@@ -90,53 +107,116 @@
     var lastMessageId = {{ messages[-1].id if messages else 0 }};
     var messagesDiv = document.getElementById('messages');
     
-    // Переменная для отслеживания, листает ли пользователь вверх
-    var isUserScrolling = false;
-    var scrollTimeout;
-    
-    // Функция прокрутки вниз
     function scrollToBottom() {
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
+    scrollToBottom();
     
-    // Проверка, находится ли пользователь внизу
-    function isAtBottom() {
-        return messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 10;
+    // Функция редактирования сообщения
+    function editMessage(msgId) {
+        var msgDiv = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .message-text`);
+        var oldText = msgDiv.innerText;
+        var newText = prompt("Редактировать сообщение:", oldText);
+        if (newText && newText.trim() !== oldText) {
+            fetch('/edit_message/' + msgId, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({content: newText})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    msgDiv.innerText = data.content;
+                    var editedBadge = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .edited-badge`);
+                    if (!editedBadge) {
+                        var timeDiv = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .message-time`);
+                        var badge = document.createElement('span');
+                        badge.className = 'edited-badge';
+                        badge.innerText = '(ред.)';
+                        timeDiv.parentElement.appendChild(badge);
+                    }
+                }
+            });
+        }
     }
     
-    // Отслеживаем, когда пользователь начинает листать
-    messagesDiv.addEventListener('scroll', function() {
-        isUserScrolling = true;
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(function() {
-            isUserScrolling = false;
-        }, 500);
-    });
-    
-    // Прокручиваем вниз при загрузке (только если есть сообщения)
-    if (messagesDiv.scrollHeight > messagesDiv.clientHeight) {
-        scrollToBottom();
+    // Функция удаления сообщения
+    function deleteMessage(msgId) {
+        if (confirm("Удалить это сообщение?")) {
+            fetch('/delete_message/' + msgId, {method: 'POST'})
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    document.querySelector(`.message-wrapper[data-msg-id="${msgId}"]`).remove();
+                }
+            });
+        }
     }
     
-    // Элементы
-    const messageInput = document.getElementById('messageInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const recordBtn = document.getElementById('recordBtn');
-    const attachBtn = document.getElementById('attachBtn');
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = 'image/*,video/*,audio/*';
-    fileInput.style.display = 'none';
-    document.body.appendChild(fileInput);
+    // Функция удаления чата
+    function deleteChat() {
+        if (confirm("Удалить весь чат? Восстановить будет невозможно!")) {
+            fetch('/delete_chat/' + chatId, {method: 'POST'})
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    window.location.href = '/chats';
+                }
+            });
+        }
+    }
     
-    let mediaRecorder;
-    let audioChunks = [];
-    let recordingTimer;
-    let seconds = 0;
-    const recordingIndicator = document.getElementById('recordingIndicator');
-    const recordTimerSpan = document.getElementById('recordTimer');
+    // Функция добавления реакции
+    function toggleReaction(msgId, emoji) {
+        fetch('/add_reaction/' + msgId, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({emoji: emoji})
+        })
+        .then(response => response.json())
+        .then(data => {
+            updateReactionsDisplay(msgId, data.reactions);
+        });
+    }
+    
+    function showReactionPicker(msgId) {
+        var emojis = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉', '💯'];
+        var picker = document.createElement('div');
+        picker.className = 'reaction-picker';
+        emojis.forEach(emoji => {
+            var btn = document.createElement('button');
+            btn.innerText = emoji;
+            btn.onclick = () => {
+                toggleReaction(msgId, emoji);
+                picker.remove();
+            };
+            picker.appendChild(btn);
+        });
+        var btn = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .add-reaction-btn`);
+        btn.parentElement.appendChild(picker);
+        setTimeout(() => picker.remove(), 3000);
+    }
+    
+    function updateReactionsDisplay(msgId, reactions) {
+        var container = document.getElementById('reactions-' + msgId);
+        container.innerHTML = '';
+        reactions.forEach(r => {
+            var span = document.createElement('span');
+            span.className = 'reaction';
+            span.innerText = r.emoji;
+            span.onclick = () => toggleReaction(msgId, r.emoji);
+            container.appendChild(span);
+        });
+        var addBtn = document.createElement('button');
+        addBtn.className = 'add-reaction-btn';
+        addBtn.innerText = '➕';
+        addBtn.onclick = () => showReactionPicker(msgId);
+        container.appendChild(addBtn);
+    }
     
     // Отправка текста
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
     sendBtn.addEventListener('click', () => {
         const content = messageInput.value.trim();
         if (content) {
@@ -151,7 +231,6 @@
                     appendMessage(data);
                     lastMessageId = data.id;
                     messageInput.value = '';
-                    // После отправки прокручиваем вниз
                     scrollToBottom();
                 }
             });
@@ -159,16 +238,20 @@
     });
     
     // Прикрепление файла
+    const attachBtn = document.getElementById('attachBtn');
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*,video/*,audio/*';
+    fileInput.style.display = 'none';
+    document.body.appendChild(fileInput);
+    
     attachBtn.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', () => {
         const file = fileInput.files[0];
         if (file) {
             const formData = new FormData();
             formData.append('file', file);
-            fetch('/send_message/' + chatId, {
-                method: 'POST',
-                body: formData
-            })
+            fetch('/send_message/' + chatId, { method: 'POST', body: formData })
             .then(response => response.json())
             .then(data => {
                 if (!data.error) {
@@ -182,12 +265,16 @@
     });
     
     // Запись голоса
+    let mediaRecorder, audioChunks = [], recordingTimer, seconds = 0;
+    const recordBtn = document.getElementById('recordBtn');
+    const recordingIndicator = document.getElementById('recordingIndicator');
+    const recordTimerSpan = document.getElementById('recordTimer');
+    
     async function startRecording() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             mediaRecorder = new MediaRecorder(stream);
             audioChunks = [];
-            
             mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
             mediaRecorder.onstop = () => {
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
@@ -196,12 +283,7 @@
                 formData.append('file', file);
                 fetch('/send_message/' + chatId, { method: 'POST', body: formData })
                 .then(response => response.json())
-                .then(data => {
-                    if (!data.error) {
-                        appendMessage(data);
-                        scrollToBottom();
-                    }
-                });
+                .then(data => { if (!data.error) { appendMessage(data); scrollToBottom(); } });
                 stream.getTracks().forEach(track => track.stop());
                 recordingIndicator.style.display = 'none';
                 clearInterval(recordingTimer);
@@ -209,39 +291,31 @@
                 recordTimerSpan.innerText = '0:00';
                 recordBtn.style.background = '';
             };
-            
             mediaRecorder.start();
             recordingIndicator.style.display = 'flex';
             recordBtn.style.background = '#ff4444';
-            
             recordingTimer = setInterval(() => {
                 seconds++;
                 const mins = Math.floor(seconds / 60);
                 const secs = seconds % 60;
                 recordTimerSpan.innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
             }, 1000);
-        } catch (err) {
-            alert('Микрофон не доступен');
-        }
+        } catch (err) { alert('Микрофон не доступен'); }
     }
     
     function stopRecording() {
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-            mediaRecorder.stop();
-        }
+        if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
     }
     
     recordBtn.addEventListener('click', () => {
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-            stopRecording();
-        } else {
-            startRecording();
-        }
+        if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
+        else startRecording();
     });
     
     function appendMessage(msg) {
         var msgDiv = document.createElement('div');
         msgDiv.className = 'message-wrapper ' + (msg.sender_id == currentUserId ? 'my-message' : 'other-message');
+        msgDiv.setAttribute('data-msg-id', msg.id);
         var bubble = document.createElement('div');
         bubble.className = 'message-bubble';
         
@@ -252,6 +326,8 @@
             bubble.appendChild(senderDiv);
         }
         
+        var contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
         if (msg.file_type === 'image') {
             var img = document.createElement('img');
             img.src = msg.file_url;
@@ -259,7 +335,7 @@
             img.style.borderRadius = '8px';
             img.style.cursor = 'pointer';
             img.onclick = () => window.open(img.src);
-            bubble.appendChild(img);
+            contentDiv.appendChild(img);
         } else if (msg.file_type === 'video') {
             var video = document.createElement('video');
             video.controls = true;
@@ -267,7 +343,7 @@
             var source = document.createElement('source');
             source.src = msg.file_url;
             video.appendChild(source);
-            bubble.appendChild(video);
+            contentDiv.appendChild(video);
         } else if (msg.file_type === 'audio') {
             var audio = document.createElement('audio');
             audio.controls = true;
@@ -275,23 +351,60 @@
             var source = document.createElement('source');
             source.src = msg.file_url;
             audio.appendChild(source);
-            bubble.appendChild(audio);
+            contentDiv.appendChild(audio);
         } else {
-            bubble.appendChild(document.createTextNode(msg.content));
+            var textDiv = document.createElement('div');
+            textDiv.className = 'message-text';
+            textDiv.textContent = msg.content;
+            contentDiv.appendChild(textDiv);
         }
+        bubble.appendChild(contentDiv);
         
+        var footerDiv = document.createElement('div');
+        footerDiv.className = 'message-footer';
         var timeDiv = document.createElement('div');
         timeDiv.className = 'message-time';
         timeDiv.textContent = msg.timestamp;
-        bubble.appendChild(timeDiv);
+        footerDiv.appendChild(timeDiv);
+        
+        if (msg.sender_id == currentUserId) {
+            var actionsDiv = document.createElement('div');
+            actionsDiv.className = 'message-actions';
+            var editBtn = document.createElement('button');
+            editBtn.className = 'edit-msg-btn';
+            editBtn.innerText = '✏️';
+            editBtn.onclick = () => editMessage(msg.id);
+            var delBtn = document.createElement('button');
+            delBtn.className = 'delete-msg-btn';
+            delBtn.innerText = '🗑️';
+            delBtn.onclick = () => deleteMessage(msg.id);
+            actionsDiv.appendChild(editBtn);
+            actionsDiv.appendChild(delBtn);
+            footerDiv.appendChild(actionsDiv);
+        }
+        bubble.appendChild(footerDiv);
+        
+        var reactionsDiv = document.createElement('div');
+        reactionsDiv.className = 'message-reactions';
+        reactionsDiv.id = 'reactions-' + msg.id;
+        if (msg.reactions) {
+            msg.reactions.forEach(r => {
+                var span = document.createElement('span');
+                span.className = 'reaction';
+                span.innerText = r.emoji;
+                span.onclick = () => toggleReaction(msg.id, r.emoji);
+                reactionsDiv.appendChild(span);
+            });
+        }
+        var addBtn = document.createElement('button');
+        addBtn.className = 'add-reaction-btn';
+        addBtn.innerText = '➕';
+        addBtn.onclick = () => showReactionPicker(msg.id);
+        reactionsDiv.appendChild(addBtn);
+        bubble.appendChild(reactionsDiv);
         
         msgDiv.appendChild(bubble);
         messagesDiv.appendChild(msgDiv);
-        
-        // Прокручиваем вниз только если пользователь не листает вверх
-        if (!isUserScrolling) {
-            scrollToBottom();
-        }
     }
     
     function pollNewMessages() {
@@ -302,9 +415,9 @@
                 appendMessage(msg);
                 lastMessageId = msg.id;
             });
+            scrollToBottom();
         });
     }
-    
     setInterval(pollNewMessages, 3000);
 </script>
 {% endblock %}
