@@ -475,6 +475,23 @@ def register_token():
         return jsonify({'status': 'ok'})
     return jsonify({'error': 'No token'}), 400
 
+# ==================== ВРЕМЕННЫЙ МАРШРУТ ДЛЯ ОБНОВЛЕНИЯ БД ====================
+@app.route('/fix_db')
+def fix_db():
+    try:
+        from sqlalchemy import text
+        with db.engine.connect() as conn:
+            # Добавляем колонки в таблицу users
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMP DEFAULT NULL"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_online BOOLEAN DEFAULT FALSE"))
+            # Добавляем колонки в таблицу messages
+            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_edited BOOLEAN DEFAULT FALSE"))
+            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reactions TEXT DEFAULT NULL"))
+            conn.commit()
+        return "✅ База данных обновлена! Все новые колонки добавлены."
+    except Exception as e:
+        return f"❌ Ошибка: {e}"
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
