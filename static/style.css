@@ -866,3 +866,156 @@ html {
 .delete-chat-btn:hover {
     background: rgba(255, 68, 68, 0.2);
 }
+/* Дополнительные стили для новых функций */
+.chat-actions {
+    display: flex;
+    gap: 10px;
+    margin-left: auto;
+}
+
+.action-btn {
+    background: none;
+    border: none;
+    color: #8696a0;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 5px;
+    width: auto;
+}
+
+.action-btn:hover {
+    color: #00a884;
+}
+
+.folders-bar {
+    display: flex;
+    gap: 10px;
+    padding: 10px;
+    overflow-x: auto;
+    background: #202c33;
+}
+
+.folder-btn {
+    background: #2a3942;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 20px;
+    color: #e9edef;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.folder-btn:hover {
+    background: #00a884;
+}
+
+.folder-select {
+    background: #2a3942;
+    border: 1px solid #3b4a54;
+    border-radius: 8px;
+    color: #e9edef;
+    padding: 4px 8px;
+    font-size: 0.7rem;
+    margin-left: 10px;
+}
+
+.reply-indicator {
+    background: rgba(0, 168, 132, 0.2);
+    border-radius: 8px;
+    padding: 4px 8px;
+    margin-bottom: 5px;
+    font-size: 0.75rem;
+    color: #00a884;
+    cursor: pointer;
+}
+
+.reply-indicator:hover {
+    background: rgba(0, 168, 132, 0.4);
+}
+
+.reply-msg-btn, .pin-msg-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.7rem;
+    opacity: 0.6;
+    padding: 2px;
+}
+
+.poll-container {
+    background: rgba(0, 168, 132, 0.1);
+    border-radius: 12px;
+    padding: 10px;
+    margin: 5px 0;
+}
+
+.poll-question {
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.poll-option {
+    padding: 8px;
+    margin: 5px 0;
+    background: #2a3942;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.poll-option:hover {
+    background: #3b4a54;
+}
+
+.poll-option.voted {
+    background: #00a884;
+}
+
+.search-result {
+    padding: 8px;
+    border-bottom: 1px solid #2a3942;
+    cursor: pointer;
+}
+
+.search-result:hover {
+    background: #2a3942;
+}
+
+.pinned-message {
+    padding: 5px 10px;
+    background: #2a3942;
+    border-radius: 8px;
+    margin: 5px 0;
+    cursor: pointer;
+}
+
+.pinned-message:hover {
+    background: #3b4a54;
+}
+
+/* Форматирование текста */
+.message-text strong {
+    font-weight: bold;
+}
+
+.message-text em {
+    font-style: italic;
+}
+
+.message-text code {
+    font-family: monospace;
+    background: #2a3942;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+.message-text .spoiler {
+    background: #3b4a54;
+    color: #3b4a54;
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 0 2px;
+}
+
+.message-text .spoiler:hover {
+    color: #e9edef;
+}
