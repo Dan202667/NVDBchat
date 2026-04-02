@@ -1,6 +1,7 @@
 import os
 import uuid
-from datetime import datetime
+import json
+from datetime import datetime, timedelta
 import cloudinary
 import cloudinary.uploader
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
@@ -51,6 +52,7 @@ class User(db.Model):
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
     is_online = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    chat_folders = db.Column(db.Text, nullable=True)  # JSON папок
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -63,6 +65,7 @@ class Chat(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     type = db.Column(db.String(10))
     name = db.Column(db.String(100))
+    folder = db.Column(db.String(50), default='Основные')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class ChatParticipant(db.Model):
@@ -71,6 +74,7 @@ class ChatParticipant(db.Model):
     chat_id = db.Column(db.Integer, db.ForeignKey('chats.id', ondelete='CASCADE'))
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'))
     joined_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_read_message_id = db.Column(db.Integer, default=0)
 
 class Message(db.Model):
     __tablename__ = 'messages'
@@ -82,6 +86,11 @@ class Message(db.Model):
     file_type = db.Column(db.String(20), nullable=True)
     is_edited = db.Column(db.Boolean, default=False)
     reactions = db.Column(db.Text, nullable=True)
+    reply_to = db.Column(db.Integer, nullable=True)
+    pinned = db.Column(db.Boolean, default=False)
+    scheduled_for = db.Column(db.DateTime, nullable=True)
+    delete_at = db.Column(db.DateTime, nullable=True)  # автоудаление
+    views = db.Column(db.Integer, default=0)  # статистика для каналов
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 class MessageReaction(db.Model):
@@ -91,6 +100,21 @@ class MessageReaction(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'))
     emoji = db.Column(db.String(10), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class Poll(db.Model):
+    __tablename__ = 'polls'
+    id = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(db.Integer, db.ForeignKey('messages.id', ondelete='CASCADE'))
+    question = db.Column(db.String(500), nullable=False)
+    options = db.Column(db.Text, nullable=False)  # JSON массив
+    votes = db.Column(db.Text, nullable=True)  # JSON объект {option: [user_ids]}
+
+class StickerPack(db.Model):
+    __tablename__ = 'sticker_packs'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    stickers = db.Column(db.Text, nullable=True)  # JSON массив URL
 
 with app.app_context():
     db.create_all()
@@ -260,8 +284,10 @@ def chats():
     if 'user_id' not in session:
         return redirect(url_for('index'))
     user_id = session['user_id']
+    user = User.query.get(user_id)
+    folders = json.loads(user.chat_folders) if user.chat_folders else ['Основные', 'Работа', 'Друзья']
     chats_list = get_user_chats(user_id)
-    return render_template('chats.html', chats=chats_list)
+    return render_template('chats.html', chats=chats_list, folders=folders)
 
 @app.route('/search_user', methods=['POST'])
 def search_user():
@@ -308,6 +334,12 @@ def chat(chat_id):
         msg.sender_avatar = sender.avatar_url
         reactions = MessageReaction.query.filter_by(message_id=msg.id).all()
         msg.reactions_list = [{'emoji': r.emoji, 'user_id': r.user_id} for r in reactions]
+        if msg.reply_to:
+            reply_msg = Message.query.get(msg.reply_to)
+            if reply_msg:
+                reply_sender = User.query.get(reply_msg.sender_id)
+                msg.reply_text = reply_msg.content[:50] if reply_msg.content else 'Файл'
+                msg.reply_sender = reply_sender.username or reply_sender.name
     other_avatar = None
     other_online = False
     if chat_obj.type == 'private':
@@ -322,7 +354,8 @@ def chat(chat_id):
     else:
         chat_name = chat_obj.name
     all_chats = get_user_chats(user_id)
-    return render_template('chat.html', chat_id=chat_id, chat_name=chat_name, messages=messages, all_chats=all_chats, chat=chat_obj, other_avatar=other_avatar, other_online=other_online)
+    pinned_messages = Message.query.filter_by(chat_id=chat_id, pinned=True).order_by(Message.timestamp.desc()).all()
+    return render_template('chat.html', chat_id=chat_id, chat_name=chat_name, messages=messages, all_chats=all_chats, chat=chat_obj, other_avatar=other_avatar, other_online=other_online, pinned_messages=pinned_messages)
 
 @app.route('/send_message/<int:chat_id>', methods=['POST'])
 def send_message(chat_id):
@@ -330,7 +363,26 @@ def send_message(chat_id):
         return jsonify({'error': 'Not logged in'}), 403
     content = request.form.get('content', '')
     file = request.files.get('file')
-    msg = Message(chat_id=chat_id, sender_id=session['user_id'])
+    reply_to = request.form.get('reply_to', type=int) or None
+    scheduled_time = request.form.get('scheduled_time')
+    delete_after = request.form.get('delete_after')  # 'hour', 'day', 'week'
+    
+    msg = Message(chat_id=chat_id, sender_id=session['user_id'], reply_to=reply_to)
+    
+    if delete_after:
+        if delete_after == 'hour':
+            msg.delete_at = datetime.utcnow() + timedelta(hours=1)
+        elif delete_after == 'day':
+            msg.delete_at = datetime.utcnow() + timedelta(days=1)
+        elif delete_after == 'week':
+            msg.delete_at = datetime.utcnow() + timedelta(weeks=1)
+    
+    if scheduled_time:
+        msg.scheduled_for = datetime.fromisoformat(scheduled_time)
+        db.session.add(msg)
+        db.session.commit()
+        return jsonify({'status': 'scheduled', 'scheduled_for': scheduled_time}), 200
+    
     if file and file.filename:
         file_url, file_type = upload_to_cloudinary(file, folder='nvdbchat/uploads')
         if file_url:
@@ -385,6 +437,17 @@ def delete_message(message_id):
     db.session.commit()
     return jsonify({'status': 'ok'})
 
+@app.route('/pin_message/<int:message_id>', methods=['POST'])
+def pin_message(message_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    msg = Message.query.get(message_id)
+    if not msg:
+        return jsonify({'error': 'Not found'}), 404
+    msg.pinned = not msg.pinned
+    db.session.commit()
+    return jsonify({'status': 'ok', 'pinned': msg.pinned})
+
 @app.route('/add_reaction/<int:message_id>', methods=['POST'])
 def add_reaction(message_id):
     if 'user_id' not in session:
@@ -404,6 +467,97 @@ def add_reaction(message_id):
     result = [{'emoji': r.emoji, 'user_id': r.user_id} for r in reactions]
     return jsonify({'reactions': result})
 
+@app.route('/create_poll/<int:chat_id>', methods=['POST'])
+def create_poll(chat_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json()
+    question = data.get('question')
+    options = data.get('options', [])
+    if not question or len(options) < 2:
+        return jsonify({'error': 'Invalid poll data'}), 400
+    
+    msg = Message(chat_id=chat_id, sender_id=session['user_id'], content=f"📊 Опрос: {question}", file_type='poll')
+    db.session.add(msg)
+    db.session.flush()
+    
+    poll = Poll(message_id=msg.id, question=question, options=json.dumps(options), votes=json.dumps({}))
+    db.session.add(poll)
+    db.session.commit()
+    
+    return jsonify({'status': 'ok', 'poll_id': poll.id})
+
+@app.route('/vote_poll/<int:poll_id>', methods=['POST'])
+def vote_poll(poll_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json()
+    option_index = data.get('option')
+    poll = Poll.query.get(poll_id)
+    if not poll:
+        return jsonify({'error': 'Poll not found'}), 404
+    
+    votes = json.loads(poll.votes) if poll.votes else {}
+    option_key = str(option_index)
+    user_votes = votes.get(option_key, [])
+    if session['user_id'] in user_votes:
+        user_votes.remove(session['user_id'])
+    else:
+        user_votes.append(session['user_id'])
+    votes[option_key] = user_votes
+    poll.votes = json.dumps(votes)
+    db.session.commit()
+    
+    return jsonify({'status': 'ok', 'votes': {opt: len(votes.get(str(opt), [])) for opt in range(len(json.loads(poll.options)))} })
+
+@app.route('/search_messages/<int:chat_id>')
+def search_messages(chat_id):
+    if 'user_id' not in session:
+        return jsonify([])
+    query = request.args.get('q', '')
+    if not query:
+        return jsonify([])
+    messages = Message.query.filter(Message.chat_id == chat_id, Message.content.ilike(f'%{query}%')).order_by(Message.timestamp.desc()).limit(50).all()
+    result = []
+    for msg in messages:
+        sender = User.query.get(msg.sender_id)
+        result.append({'id': msg.id, 'content': msg.content[:100] if msg.content else 'Файл', 'sender_name': sender.username or sender.name, 'timestamp': msg.timestamp.strftime('%H:%M %d.%m')})
+    return jsonify(result)
+
+@app.route('/get_stickers')
+def get_stickers():
+    sticker_packs = StickerPack.query.all()
+    result = []
+    for pack in sticker_packs:
+        stickers = json.loads(pack.stickers) if pack.stickers else []
+        result.append({'id': pack.id, 'name': pack.name, 'stickers': stickers})
+    return jsonify(result)
+
+@app.route('/add_sticker_pack', methods=['POST'])
+def add_sticker_pack():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json()
+    name = data.get('name')
+    stickers = data.get('stickers', [])
+    pack = StickerPack(name=name, owner_id=session['user_id'], stickers=json.dumps(stickers))
+    db.session.add(pack)
+    db.session.commit()
+    return jsonify({'status': 'ok', 'pack_id': pack.id})
+
+@app.route('/update_chat_folder/<int:chat_id>', methods=['POST'])
+def update_chat_folder(chat_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json()
+    folder = data.get('folder')
+    chat = Chat.query.get(chat_id)
+    if chat:
+        chat.folder = folder
+        db.session.commit()
+        return jsonify({'status': 'ok'})
+    return jsonify({'error': 'Chat not found'}), 404
+
 @app.route('/delete_chat/<int:chat_id>', methods=['POST'])
 def delete_chat(chat_id):
     if 'user_id' not in session:
@@ -418,7 +572,7 @@ def get_new_messages(chat_id):
     if 'user_id' not in session:
         return jsonify([])
     last_id = request.args.get('last_id', 0, type=int)
-    messages = Message.query.filter(Message.chat_id == chat_id, Message.id > last_id).order_by(Message.timestamp).all()
+    messages = Message.query.filter(Message.chat_id == chat_id, Message.id > last_id, Message.scheduled_for.is_(None)).order_by(Message.timestamp).all()
     result = []
     for msg in messages:
         sender = User.query.get(msg.sender_id)
@@ -456,9 +610,9 @@ def admin_users():
     if 'user_id' not in session:
         return redirect(url_for('index'))
     user = User.query.get(session['user_id'])
-    if not user or user.username != 'Dan':
+    if user.username != 'Dan':
         flash('Доступ запрещён')
-        return redirect(url_for('chats'))
+        return redirect(url_for('profile'))
     users = User.query.all()
     return render_template('admin_users.html', users=users)
 
@@ -470,27 +624,10 @@ def register_token():
     token = data.get('token')
     if token:
         user = User.query.get(session['user_id'])
-        user.fcm_token = token
+        user.onesignal_user_id = token
         db.session.commit()
         return jsonify({'status': 'ok'})
     return jsonify({'error': 'No token'}), 400
-
-# ==================== ВРЕМЕННЫЙ МАРШРУТ ДЛЯ ОБНОВЛЕНИЯ БД ====================
-@app.route('/fix_db')
-def fix_db():
-    try:
-        from sqlalchemy import text
-        with db.engine.connect() as conn:
-            # Добавляем колонки в таблицу users
-            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMP DEFAULT NULL"))
-            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_online BOOLEAN DEFAULT FALSE"))
-            # Добавляем колонки в таблицу messages
-            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_edited BOOLEAN DEFAULT FALSE"))
-            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reactions TEXT DEFAULT NULL"))
-            conn.commit()
-        return "✅ База данных обновлена! Все новые колонки добавлены."
-    except Exception as e:
-        return f"❌ Ошибка: {e}"
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
