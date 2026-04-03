@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="padding:20px">
+    <h2>Системные настройки</h2>
+    <form method="POST" action="{{ url_for('admin_settings_update') }}">
+        <label>
+            <input type="checkbox" name="registration_enabled" {% if registration_enabled %}checked{% endif %}> Разрешена регистрация новых пользователей
+        </label><br><br>
+        <button type="submit" class="btn">Сохранить</button>
+    </form>
+    <a href="{{ url_for('admin_dashboard') }}">← Назад</a>
+</div>
+{% endblock %}
