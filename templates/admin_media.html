@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="padding:20px">
+    <h2>Медиафайлы</h2>
+    <div style="display:flex; flex-wrap:wrap; gap:10px;">
+        {% for m in media %}
+        <div style="border:1px solid #2a3942; border-radius:8px; padding:5px; width:150px; text-align:center;">
+            {% if m.file_type == 'image' %}
+                <img src="{{ m.file_url }}" style="max-width:100%; border-radius:8px;">
+            {% elif m.file_type == 'video' %}
+                <video src="{{ m.file_url }}" style="max-width:100%;"></video>
+            {% else %}
+                🎵 Аудио
+            {% endif %}
+            <div><small>{{ m.timestamp.strftime('%d.%m.%Y') }}</small></div>
+            <form method="POST" action="{{ url_for('admin_message_delete', message_id=m.id) }}">
+                <button class="btn-small">Удалить</button>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+    <a href="{{ url_for('admin_dashboard') }}">← Назад</a>
+</div>
+{% endblock %}
