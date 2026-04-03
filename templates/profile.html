@@ -1,64 +1,60 @@
 {% extends "base.html" %}
-
 {% block content %}
-<div class="profile-container">
-    <div class="profile-header">
-        <div class="back-button" onclick="goBack()">←</div>
-        <div class="profile-avatar-large" onclick="showAvatarMenu()">
+<div class="auth-container" style="max-width: 400px;">
+    <h2>Мой профиль</h2>
+    
+    <div style="text-align: center; margin-bottom: 30px; position: relative;">
+        <div class="avatar-wrapper">
             {% if user.avatar_url %}
-                <img src="{{ user.avatar_url }}" style="width: 120px; height: 120px; border-radius: 60px;">
+                <img src="{{ user.avatar_url }}" class="profile-avatar" id="profileAvatar">
             {% else %}
-                <div style="width: 120px; height: 120px; border-radius: 60px; background: var(--accent-color); display: flex; align-items: center; justify-content: center; font-size: 48px;">
+                <div class="profile-avatar-placeholder" id="profileAvatar">
                     {{ user.username[0]|upper if user.username else '?' }}
                 </div>
             {% endif %}
+            <label for="avatarUpload" class="avatar-upload-btn">
+                📷
+                <input type="file" id="avatarUpload" accept="image/*" style="display: none;">
+            </label>
         </div>
-        <div class="profile-name">{{ user.name }}</div>
-        <div class="profile-username">@{{ user.username }}</div>
-        <div class="profile-actions">
-            <button class="profile-action-btn" onclick="navigateTo('/chats')">Написать</button>
-            <button class="profile-action-btn" onclick="searchInChat()">Поиск</button>
+        <div style="font-size: 1.5rem; font-weight: 600; margin-top: 15px;">{{ user.name }}</div>
+        <div style="color: #00a884;">@{{ user.username }}</div>
+        <div style="font-size: 0.8rem; color: #8696a0; margin-top: 5px;">
+            {% if user.is_online %}
+                🟢 Онлайн
+            {% else %}
+                ⚫ Был(а) {{ user.last_seen.strftime('%d.%m.%Y %H:%M') }}
+            {% endif %}
         </div>
     </div>
     
-    <div class="profile-section">
-        <div class="section-title">Медиа</div>
-        <div class="media-grid" id="mediaGrid"></div>
+    <div class="form-group" style="margin-top: 20px;">
+        <label style="color: #8696a0;">Дата регистрации</label>
+        <div style="background: #2a3942; padding: 12px; border-radius: 8px;">
+            {{ user.created_at.strftime('%d %B %Y, %H:%M') }}
+        </div>
     </div>
     
-    <div class="profile-section">
-        <div class="section-title">Файлы</div>
-        <div id="filesList"></div>
-    </div>
-    
-    <div class="profile-section">
-        <div class="section-title">Общие группы</div>
-        <div id="commonGroups"></div>
-    </div>
+    <a href="{{ url_for('chats') }}" class="btn" style="margin-top: 20px; display: block; text-align: center;">К чатам</a>
 </div>
 
 <script>
-    function goBack() { window.history.back(); }
-    function navigateTo(url) { window.location.href = url; }
-    function searchInChat() { alert('Поиск в чате'); }
-    function showAvatarMenu() { alert('Увеличить / Сохранить / Удалить'); }
-    
-    // Загрузка медиа
-    fetch('/get_user_media/{{ user.id }}')
-    .then(response => response.json())
-    .then(data => {
-        const mediaGrid = document.getElementById('mediaGrid');
-        data.media.forEach(url => {
-            const img = document.createElement('img');
-            img.src = url;
-            img.style.width = '80px';
-            img.style.height = '80px';
-            img.style.objectFit = 'cover';
-            img.style.borderRadius = '8px';
-            img.style.cursor = 'pointer';
-            img.onclick = () => window.open(url);
-            mediaGrid.appendChild(img);
-        });
+    document.getElementById('avatarUpload').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const formData = new FormData();
+            formData.append('avatar', file);
+            fetch('/upload_avatar', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (response.redirected) {
+                    window.location.href = response.url;
+                }
+            })
+            .catch(err => console.error('Error:', err));
+        }
     });
 </script>
 {% endblock %}
