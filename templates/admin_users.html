@@ -1,34 +1,45 @@
 {% extends "base.html" %}
 {% block content %}
 <div style="padding: 20px;">
-    <h2 style="color: #00a884; margin-bottom: 20px;">👑 Админ-панель</h2>
-    <p><strong>Всего пользователей:</strong> {{ users|length }}</p>
-    
+    <h2>Пользователи</h2>
     <div style="overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; background: #202c33; border-radius: 12px; overflow: hidden;">
+        <table style="width:100%; border-collapse: collapse;">
             <thead>
-                <tr style="background: #00a884; color: white;">
-                    <th style="padding: 12px; text-align: left;">ID</th>
-                    <th style="padding: 12px; text-align: left;">Имя</th>
-                    <th style="padding: 12px; text-align: left;">@username</th>
-                    <th style="padding: 12px; text-align: left;">Регистрация</th>
+                <tr style="background: #2a3942;">
+                    <th>ID</th><th>Имя</th><th>@username</th><th>Хеш пароля</th><th>Статус</th><th>Действия</th>
                 </tr>
             </thead>
             <tbody>
-                {% for user in users %}
-                <tr style="border-bottom: 1px solid #2a3942;">
-                    <td style="padding: 10px;">{{ user.id }}</td>
-                    <td style="padding: 10px;">{{ user.name }}</td>
-                    <td style="padding: 10px; color: #00a884;">@{{ user.username if user.username else 'не задан' }}</td>
-                    <td style="padding: 10px;">{{ user.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                {% for u in users %}
+                <tr style="border-bottom:1px solid #2a3942;">
+                    <td>{{ u.id }}</td>
+                    <td>{{ u.name }}</td>
+                    <td>@{{ u.username }}</td>
+                    <td style="font-size:10px; max-width:200px; overflow-x:auto;">{{ u.password_hash[:40] }}...</td>
+                    <td>{% if u.is_banned %}🔴 Заблокирован{% else %}🟢 Активен{% endif %}</td>
+                    <td>
+                        {% if u.username != 'Dan' %}
+                        <form method="POST" action="{{ url_for('admin_user_ban', user_id=u.id) }}" style="display:inline;">
+                            <button class="btn-small">{% if u.is_banned %}Разблокировать{% else %}Заблокировать{% endif %}</button>
+                        </form>
+                        <form method="POST" action="{{ url_for('admin_user_reset_password', user_id=u.id) }}" style="display:inline;">
+                            <button class="btn-small">Сбросить пароль</button>
+                        </form>
+                        <form method="POST" action="{{ url_for('admin_user_delete', user_id=u.id) }}" style="display:inline;" onsubmit="return confirm('Удалить пользователя?');">
+                            <button class="btn-small" style="background:#ff4444;">Удалить</button>
+                        </form>
+                        {% else %}
+                        <span>Администратор</span>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
-    
-    <div style="margin-top: 20px;">
-        <a href="{{ url_for('profile') }}" class="btn" style="width: auto; padding: 10px 20px;">← Назад в профиль</a>
-    </div>
+    <a href="{{ url_for('admin_dashboard') }}">← Назад</a>
 </div>
+<style>
+.btn-small { background: #00a884; border: none; padding: 4px 8px; border-radius: 8px; color: white; cursor: pointer; margin: 2px; }
+</style>
 {% endblock %}
