@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="padding: 20px;">
+    <h2>Последние сообщения</h2>
+    <div style="overflow-x: auto;">
+        <table style="width:100%; border-collapse: collapse;">
+            <thead><tr><th>ID</th><th>Чат</th><th>Отправитель</th><th>Текст</th><th>Время</th><th>Действие</th></tr></thead>
+            <tbody>
+                {% for msg in messages %}
+                <tr>
+                    <td>{{ msg.id }}</td>
+                    <td>{{ msg.chat_id }}</td>
+                    <td>{{ msg.sender_id }}</td>
+                    <td>{{ msg.content[:50] if msg.content else 'Файл' }}</td>
+                    <td>{{ msg.timestamp.strftime('%d.%m.%Y %H:%M') }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('admin_message_delete', message_id=msg.id) }}" onsubmit="return confirm('Удалить сообщение?');">
+                            <button class="btn-small">🗑️</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <a href="{{ url_for('admin_dashboard') }}">← Назад</a>
+</div>
+{% endblock %}
