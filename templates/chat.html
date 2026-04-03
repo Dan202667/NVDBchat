@@ -1,328 +1,58 @@
 {% extends "base.html" %}
+{% block header %}
+<div class="app-header">
+    <h1>NVDBchat</h1>
+    <div>
+        <span style="color:#8696a0; margin-right:15px;">{{ session.username }}</span>
+        <a href="{{ url_for('profile') }}">Профиль</a>
+        <a href="{{ url_for('logout') }}">Выйти</a>
+    </div>
+</div>
+{% endblock %}
 
 {% block content %}
-<div class="chat-page">
-    <div class="chat-header">
-        <div class="back-button" onclick="goBack()">←</div>
-        <div class="chat-header-avatar" onclick="openProfile()">
-            {% if chat.type == 'group' %}
-                👥
-            {% else %}
-                {% if other_avatar %}
-                    <img src="{{ other_avatar }}" style="width: 36px; height: 36px; border-radius: 18px;">
-                {% else %}
-                    👤
-                {% endif %}
-            {% endif %}
+<div class="chats-layout">
+    <div class="chats-sidebar">
+        <div class="chats-header">
+            <h2>Чаты</h2>
+            <a href="{{ url_for('create_group') }}" class="new-chat-btn">+</a>
         </div>
-        <div class="chat-header-info" onclick="openProfile()">
-            <div class="chat-header-name">{{ chat_name }}</div>
-            <div class="chat-header-status" id="chatStatus">
-                {% if other_online %}🟢 Онлайн{% else %}⚫ Офлайн{% endif %}
-            </div>
+        <div class="search-box">
+            <form method="POST" action="{{ url_for('search_user') }}">
+                <input type="text" name="username" placeholder="Поиск по @username..." required>
+            </form>
         </div>
-        <div class="chat-header-actions">
-            <div class="chat-header-action" onclick="openChatMenu()">⋮</div>
-            <div class="chat-header-action" onclick="startCall()">📞</div>
-        </div>
-    </div>
-    
-    <!-- Индикатор печатает -->
-    <div id="typingIndicator" class="typing-indicator" style="display: none;">✏️ Печатает...</div>
-    
-    <!-- Панель ответа -->
-    <div id="replyBar" class="reply-bar" style="display: none;">
-        <div id="replyText">Ответ...</div>
-        <div class="reply-bar-close" onclick="clearReply()">✕</div>
-    </div>
-    
-    <div class="messages-container" id="messages">
-        {% for msg in messages %}
-        <div class="message-wrapper {% if msg.sender_id == session.user_id %}my-message{% else %}other-message{% endif %}" 
-             data-msg-id="{{ msg.id }}"
-             onclick="selectMessage(event, {{ msg.id }})"
-             oncontextmenu="showMessageMenu(event, {{ msg.id }})">
-            {% if msg.sender_id != session.user_id %}
-                <div class="message-avatar">
-                    <img src="{{ msg.sender_avatar or '/static/default-avatar.png' }}" style="width: 28px; height: 28px; border-radius: 14px;">
-                </div>
-            {% endif %}
-            <div class="message-bubble">
-                <div class="message-text">{{ msg.content|safe }}</div>
-                <div class="message-footer">
-                    <span class="message-time">{{ msg.timestamp.strftime('%H:%M') }}</span>
-                    {% if msg.sender_id == session.user_id %}
-                        <span class="message-status">
-                            {% if msg.is_read %}✅✅{% else %}✅{% endif %}
-                        </span>
+        <div class="chats-list">
+            {% for chat in chats %}
+            <a href="{{ url_for('chat', chat_id=chat.id) }}" class="chat-item">
+                <div class="chat-avatar">
+                    {% if chat.type == 'group' %}
+                        👥
+                    {% else %}
+                        {% if chat.other_avatar %}
+                            <img src="{{ chat.other_avatar }}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
+                        {% else %}
+                            👤
+                        {% endif %}
                     {% endif %}
                 </div>
-                <div class="reactions-bar" id="reactions-{{ msg.id }}">
-                    {% for r in msg.reactions_list %}
-                        <span class="reaction" onclick="toggleReaction({{ msg.id }}, '{{ r.emoji }}')">{{ r.emoji }}</span>
-                    {% endfor %}
+                <div class="chat-info">
+                    <div class="chat-name">{{ chat.display_name }}</div>
+                    <div class="chat-last-msg">
+                        {% if chat.last_message %}
+                            {{ chat.last_message.content[:30] if chat.last_message.content else 'Файл' }}
+                        {% else %}
+                            Нет сообщений
+                        {% endif %}
+                    </div>
                 </div>
+            </a>
+            {% else %}
+            <div style="padding: 20px; text-align: center; color: #8696a0;">
+                У вас пока нет чатов. Начните поиск!
             </div>
-        </div>
-        {% endfor %}
-    </div>
-    
-    <div class="input-area">
-        <div class="input-row">
-            <div class="attach-button" onclick="showAttachMenu()">+</div>
-            <input type="text" class="message-input" id="messageInput" placeholder="Сообщение..." autocomplete="off">
-            <div class="emoji-button" onclick="showEmojiPicker()">😊</div>
-            <div class="voice-button" id="voiceBtn" onmousedown="startRecording()" onmouseup="stopRecording()" ontouchstart="startRecording()" ontouchend="stopRecording()">🎤</div>
-            <div class="send-button" id="sendBtn" onclick="sendMessage()">✈️</div>
-        </div>
-    </div>
-    
-    <!-- Меню прикрепления -->
-    <div id="attachMenu" class="attach-menu">
-        <div class="attach-menu-grid">
-            <div class="attach-menu-item" onclick="attachCamera()">📷 Камера</div>
-            <div class="attach-menu-item" onclick="attachGallery()">🖼 Галерея</div>
-            <div class="attach-menu-item" onclick="attachFile()">📁 Файл</div>
-            <div class="attach-menu-item" onclick="attachAudio()">🎤 Аудио</div>
-            <div class="attach-menu-item" onclick="attachLocation()">📍 Локация</div>
-            <div class="attach-menu-item" onclick="attachContact()">👤 Контакт</div>
-            <div class="attach-menu-item" onclick="createPoll()">📊 Опрос</div>
-        </div>
-        <div style="text-align: center; margin-top: 16px;">
-            <div class="attach-menu-item" onclick="closeAttachMenu()">Отмена</div>
-        </div>
-    </div>
-    
-    <!-- Меню сообщения -->
-    <div id="messageMenu" class="attach-menu" style="display: none;">
-        <div class="attach-menu-grid">
-            <div class="attach-menu-item" onclick="copyMessage()">📋 Копировать</div>
-            <div class="attach-menu-item" onclick="forwardMessage()">↗️ Переслать</div>
-            <div class="attach-menu-item" onclick="replyToMessage()">↩️ Ответить</div>
-            <div class="attach-menu-item" onclick="editMessage()">✏️ Редактировать</div>
-            <div class="attach-menu-item" onclick="deleteMessageConfirm()">🗑 Удалить</div>
-        </div>
-        <div style="text-align: center; margin-top: 16px;">
-            <div class="attach-menu-item" onclick="closeMessageMenu()">Отмена</div>
+            {% endfor %}
         </div>
     </div>
 </div>
-
-<script>
-    var chatId = {{ chat_id }};
-    var currentUserId = {{ session.user_id }};
-    var lastMessageId = {{ messages[-1].id if messages else 0 }};
-    var messagesDiv = document.getElementById('messages');
-    var typingTimeout;
-    var currentReplyTo = null;
-    var selectedMessageId = null;
-    var isSelecting = false;
-    
-    // Прокрутка
-    function scrollToBottom() {
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-    scrollToBottom();
-    
-    var isUserScrolling = false;
-    messagesDiv.addEventListener('scroll', () => {
-        isUserScrolling = true;
-        clearTimeout(window.scrollTimeout);
-        window.scrollTimeout = setTimeout(() => { isUserScrolling = false; }, 500);
-    });
-    
-    function scrollToBottomIfNeeded() {
-        if (!isUserScrolling) messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-    
-    // Отправка сообщения
-    function sendMessage() {
-        var input = document.getElementById('messageInput');
-        var content = input.value.trim();
-        if (!content) return;
-        
-        var formData = new FormData();
-        formData.append('content', content);
-        if (currentReplyTo) formData.append('reply_to', currentReplyTo);
-        
-        fetch('/send_message/' + chatId, { method: 'POST', body: formData })
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) { alert(data.error); return; }
-            appendMessage(data);
-            lastMessageId = data.id;
-            input.value = '';
-            clearReply();
-            scrollToBottomIfNeeded();
-        });
-    }
-    
-    // Индикатор печатает
-    document.getElementById('messageInput').addEventListener('input', function() {
-        clearTimeout(typingTimeout);
-        fetch('/typing/' + chatId, { method: 'POST' });
-        typingTimeout = setTimeout(() => {
-            fetch('/stop_typing/' + chatId, { method: 'POST' });
-        }, 1000);
-    });
-    
-    // Ответ на сообщение
-    function setReplyTo(msgId, senderName, text) {
-        currentReplyTo = msgId;
-        document.getElementById('replyBar').style.display = 'flex';
-        document.getElementById('replyText').innerHTML = `Ответ ${senderName}: ${text.substring(0, 50)}`;
-    }
-    
-    function clearReply() {
-        currentReplyTo = null;
-        document.getElementById('replyBar').style.display = 'none';
-    }
-    
-    // Реакции (двойной тап)
-    function setupDoubleTap() {
-        let lastTap = 0;
-        document.querySelectorAll('.message-wrapper').forEach(msg => {
-            msg.addEventListener('touchend', (e) => {
-                const now = Date.now();
-                if (now - lastTap < 300) {
-                    e.preventDefault();
-                    const msgId = msg.getAttribute('data-msg-id');
-                    toggleReaction(msgId, '❤️');
-                }
-                lastTap = now;
-            });
-        });
-    }
-    
-    window.toggleReaction = function(msgId, emoji) {
-        fetch('/add_reaction/' + msgId, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ emoji: emoji })
-        })
-        .then(response => response.json())
-        .then(data => updateReactionsDisplay(msgId, data.reactions));
-    };
-    
-    // Меню прикрепления
-    function showAttachMenu() {
-        document.getElementById('attachMenu').classList.add('open');
-    }
-    
-    function closeAttachMenu() {
-        document.getElementById('attachMenu').classList.remove('open');
-    }
-    
-    // Меню сообщения
-    window.showMessageMenu = function(event, msgId) {
-        event.preventDefault();
-        selectedMessageId = msgId;
-        var menu = document.getElementById('messageMenu');
-        menu.style.display = 'block';
-        menu.classList.add('open');
-        return false;
-    };
-    
-    function closeMessageMenu() {
-        document.getElementById('messageMenu').style.display = 'none';
-        document.getElementById('messageMenu').classList.remove('open');
-    }
-    
-    // Запись голоса
-    let mediaRecorder, audioChunks = [], isRecording = false;
-    
-    function startRecording() {
-        if (isRecording) return;
-        navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(stream => {
-            mediaRecorder = new MediaRecorder(stream);
-            audioChunks = [];
-            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-            mediaRecorder.onstop = () => {
-                const blob = new Blob(audioChunks, { type: 'audio/webm' });
-                const file = new File([blob], 'voice.webm', { type: 'audio/webm' });
-                const formData = new FormData();
-                formData.append('file', file);
-                fetch('/send_message/' + chatId, { method: 'POST', body: formData })
-                .then(response => response.json())
-                .then(data => { if (!data.error) appendMessage(data); });
-                stream.getTracks().forEach(t => t.stop());
-                isRecording = false;
-            };
-            mediaRecorder.start();
-            isRecording = true;
-            document.getElementById('voiceBtn').style.color = '#ff3b30';
-        });
-    }
-    
-    function stopRecording() {
-        if (mediaRecorder && isRecording) {
-            mediaRecorder.stop();
-            document.getElementById('voiceBtn').style.color = '';
-        }
-    }
-    
-    // Добавление сообщения в DOM
-    function appendMessage(msg) {
-        var msgDiv = document.createElement('div');
-        msgDiv.className = 'message-wrapper ' + (msg.sender_id == currentUserId ? 'my-message' : 'other-message');
-        msgDiv.setAttribute('data-msg-id', msg.id);
-        
-        var bubble = document.createElement('div');
-        bubble.className = 'message-bubble';
-        bubble.innerHTML = `
-            <div class="message-text">${escapeHtml(msg.content)}</div>
-            <div class="message-footer">
-                <span class="message-time">${msg.timestamp}</span>
-                ${msg.sender_id == currentUserId ? '<span class="message-status">✅</span>' : ''}
-            </div>
-            <div class="reactions-bar" id="reactions-${msg.id}"></div>
-        `;
-        msgDiv.appendChild(bubble);
-        messagesDiv.appendChild(msgDiv);
-        scrollToBottomIfNeeded();
-    }
-    
-    function escapeHtml(text) {
-        if (!text) return '';
-        return text.replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
-        }).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-          .replace(/\*(.*?)\*/g, '<em>$1</em>')
-          .replace(/`(.*?)`/g, '<code>$1</code>')
-          .replace(/\|\|(.*?)\|\|/g, '<span class="spoiler">$1</span>');
-    }
-    
-    // Опрос новых сообщений
-    function pollNewMessages() {
-        fetch('/get_new_messages/' + chatId + '?last_id=' + lastMessageId)
-        .then(response => response.json())
-        .then(messages => {
-            messages.forEach(msg => { appendMessage(msg); lastMessageId = msg.id; });
-        });
-    }
-    setInterval(pollNewMessages, 3000);
-    
-    // Функции для меню
-    function goBack() { window.location.href = '/chats'; }
-    function openProfile() { window.location.href = '/profile'; }
-    function openChatMenu() { alert('Меню чата'); }
-    function startCall() { alert('Звонок (будет реализован)'); }
-    function showEmojiPicker() { alert('Эмодзи (будет реализовано)'); }
-    function attachCamera() { alert('Камера (будет реализована)'); }
-    function attachGallery() { alert('Галерея (будет реализована)'); }
-    function attachFile() { alert('Файл (будет реализован)'); }
-    function attachAudio() { alert('Аудиофайл'); }
-    function attachLocation() { alert('Локация (будет реализована)'); }
-    function attachContact() { alert('Контакт (будет реализован)'); }
-    function createPoll() { alert('Опрос (будет реализован)'); }
-    function copyMessage() { alert('Копировать'); closeMessageMenu(); }
-    function forwardMessage() { alert('Переслать'); closeMessageMenu(); }
-    function replyToMessage() { alert('Ответить'); closeMessageMenu(); }
-    function editMessage() { alert('Редактировать'); closeMessageMenu(); }
-    function deleteMessageConfirm() { alert('Удалить'); closeMessageMenu(); }
-</script>
 {% endblock %}
