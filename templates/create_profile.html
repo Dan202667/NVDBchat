@@ -2,14 +2,10 @@
 {% block content %}
 <div class="auth-container">
     <h2>Завершите создание профиля</h2>
-    <p>Придумайте уникальный @username и загрузите аватар (необязательно).</p>
-    <form method="POST" action="{{ url_for('create_profile') }}" enctype="multipart/form-data">
+    <p>Придумайте уникальный @username (только латинские буквы, цифры и подчёркивание).</p>
+    <form method="POST" action="{{ url_for('create_profile') }}">
         <div class="form-group">
             <input type="text" name="username" placeholder="@username (без @)" required pattern="[A-Za-z0-9_]+" title="Только латинские буквы, цифры и подчёркивание">
-        </div>
-        <div class="form-group">
-            <label>Аватар (jpg, png, gif):</label>
-            <input type="file" name="avatar" accept="image/*">
         </div>
         <button type="submit" class="btn">Сохранить</button>
     </form>
