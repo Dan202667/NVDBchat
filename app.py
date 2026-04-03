@@ -53,7 +53,6 @@ class User(db.Model):
     is_online = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     chat_folders = db.Column(db.Text, nullable=True)
-    onesignal_user_id = db.Column(db.String(300), nullable=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
