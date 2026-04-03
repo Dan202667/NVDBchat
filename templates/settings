@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="settings-container">
+    <div class="settings-header">
+        <div class="back-button" onclick="goBack()">←</div>
+        <h1>Настройки</h1>
+    </div>
+    
+    <div class="settings-section">
+        <div class="section-title">Аккаунт</div>
+        <div class="settings-item" onclick="editProfile()">
+            <span>👤</span> Редактировать профиль
+        </div>
+        <div class="settings-item" onclick="changePhone()">
+            <span>📱</span> Сменить номер
+        </div>
+        <div class="settings-item danger" onclick="deleteAccount()">
+            <span>🗑️</span> Удалить аккаунт
+        </div>
+    </div>
+    
+    <div class="settings-section">
+        <div class="section-title">Приватность</div>
+        <div class="settings-item" onclick="setPrivacy('last_seen')">
+            <span>👁️</span> Кто видит был в сети
+        </div>
+        <div class="settings-item" onclick="setPrivacy('avatar')">
+            <span>🖼️</span> Кто видит фото профиля
+        </div>
+        <div class="settings-item" onclick="showBlockedUsers()">
+            <span>🚫</span> Блокированные пользователи
+        </div>
+    </div>
+    
+    <div class="settings-section">
+        <div class="section-title">Чаты</div>
+        <div class="settings-item" onclick="changeTheme()">
+            <span>🎨</span> Тема оформления
+        </div>
+        <div class="settings-item" onclick="changeFontSize()">
+            <span>🔤</span> Размер шрифта
+        </div>
+        <div class="settings-item" onclick="changeChatBackground()">
+            <span>🖼️</span> Фон чата
+        </div>
+    </div>
+    
+    <div class="settings-section">
+        <div class="section-title">Данные и память</div>
+        <div class="settings-item" onclick="showStorageUsage()">
+            <span>💾</span> Использовано памяти: <span id="storageUsage">0 MB</span>
+        </div>
+        <div class="settings-item" onclick="clearCache()">
+            <span>🗑️</span> Очистить кеш
+        </div>
+        <div class="settings-item" onclick="exportData()">
+            <span>📤</span> Экспорт данных
+        </div>
+    </div>
+    
+    <div class="settings-section">
+        <div class="section-title">Язык</div>
+        <div class="settings-item" onclick="changeLanguage()">
+            <span>🌐</span> Русский
+        </div>
+    </div>
+</div>
+
+<script>
+    function goBack() { window.history.back(); }
+    function editProfile() { alert('Редактирование профиля'); }
+    function changePhone() { alert('Смена номера'); }
+    function deleteAccount() { if(confirm('Удалить аккаунт?')) alert('Аккаунт удалён'); }
+    function setPrivacy(type) { alert('Настройка приватности: ' + type); }
+    function showBlockedUsers() { alert('Заблокированные пользователи'); }
+    function changeTheme() { document.body.classList.toggle('dark'); }
+    function changeFontSize() { alert('Изменение размера шрифта'); }
+    function changeChatBackground() { alert('Изменение фона чата'); }
+    function showStorageUsage() { alert('Использовано памяти: 0 MB'); }
+    function clearCache() { if(confirm('Очистить кеш?')) alert('Кеш очищен'); }
+    function exportData() { alert('Экспорт данных'); }
+    function changeLanguage() { alert('Выбор языка'); }
+    
+    fetch('/get_storage_usage')
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('storageUsage').innerText = data.size + ' MB';
+    });
+</script>
+{% endblock %}
