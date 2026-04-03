@@ -343,7 +343,31 @@ def admin_settings_update():
         db.session.commit()
     flash('Настройки сохранены')
     return redirect(url_for('admin_settings'))
-
+# ========== ВРЕМЕННЫЙ МАРШРУТ ДЛЯ ОБНОВЛЕНИЯ БД ==========
+@app.route('/fix_db_all')
+def fix_db_all():
+    from sqlalchemy import text
+    try:
+        with db.engine.connect() as conn:
+            # Таблица users
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMP DEFAULT NULL"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_online BOOLEAN DEFAULT FALSE"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_folders TEXT DEFAULT NULL"))
+            # Таблица messages
+            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to INTEGER DEFAULT NULL"))
+            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS pinned BOOLEAN DEFAULT FALSE"))
+            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMP DEFAULT NULL"))
+            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS delete_at TIMESTAMP DEFAULT NULL"))
+            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS views INTEGER DEFAULT 0"))
+            # Таблица chat_participants
+            conn.execute(text("ALTER TABLE chat_participants ADD COLUMN IF NOT EXISTS last_read_message_id INTEGER DEFAULT 0"))
+            # Таблица chats
+            conn.execute(text("ALTER TABLE chats ADD COLUMN IF NOT EXISTS folder VARCHAR(50) DEFAULT 'Основные'"))
+            conn.commit()
+        return "✅ База данных обновлена. Все недостающие колонки добавлены."
+    except Exception as e:
+        return f"❌ Ошибка: {e}"
 # ==================== ЗАПУСК ====================
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
