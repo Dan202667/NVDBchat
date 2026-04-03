@@ -20,4 +20,416 @@
             {% else %}
                 {% if other_avatar %}
                     <img src="{{ other_avatar }}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
-                {% else
+                {% else %}
+                    👤
+                {% endif %}
+            {% endif %}
+        </div>
+        <div class="chat-header-info">
+            <div class="chat-header-name">{{ chat_name }}</div>
+            <div class="chat-header-status">
+                {% if chat.type == 'group' %}
+                    Групповой чат
+                {% else %}
+                    {% if other_online %}
+                        🟢 Онлайн
+                    {% else %}
+                        ⚫ Офлайн
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+        <button class="delete-chat-btn" onclick="deleteChat()">🗑️ Удалить чат</button>
+    </div>
+    
+    <div class="messages-container" id="messages">
+        {% for msg in messages %}
+        <div class="message-wrapper {% if msg.sender_id == session.user_id %}my-message{% else %}other-message{% endif %}" data-msg-id="{{ msg.id }}">
+            <div class="message-bubble">
+                {% if msg.sender_id != session.user_id and chat.type == 'group' %}
+                <div class="message-sender">{{ msg.sender_name }}</div>
+                {% endif %}
+                
+                <div class="message-content">
+                    {% if msg.file_type == 'image' %}
+                        <img src="{{ msg.file_url }}" style="max-width: 200px; border-radius: 8px; cursor: pointer;" onclick="window.open(this.src, '_blank')">
+                    {% elif msg.file_type == 'video' %}
+                        <video controls style="max-width: 200px; border-radius: 8px;"><source src="{{ msg.file_url }}"></video>
+                    {% elif msg.file_type == 'audio' %}
+                        <audio controls style="max-width: 200px; border-radius: 8px;"><source src="{{ msg.file_url }}"></audio>
+                    {% else %}
+                        <div class="message-text">{{ msg.content }}</div>
+                        {% if msg.is_edited %}<span class="edited-badge">(ред.)</span>{% endif %}
+                    {% endif %}
+                </div>
+                
+                <div class="message-footer">
+                    <div class="message-time">{{ msg.timestamp.strftime('%H:%M') }}</div>
+                    <div class="message-actions">
+                        {% if msg.sender_id == session.user_id %}
+                            <button class="edit-msg-btn" onclick="editMessage({{ msg.id }})">✏️</button>
+                            <button class="delete-msg-btn" onclick="deleteMessage({{ msg.id }})">🗑️</button>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="message-reactions" id="reactions-{{ msg.id }}">
+                    {% for r in msg.reactions_list %}
+                        <span class="reaction" onclick="toggleReaction({{ msg.id }}, '{{ r.emoji }}')">{{ r.emoji }}</span>
+                    {% endfor %}
+                    <button class="add-reaction-btn" onclick="showReactionPicker({{ msg.id }})">➕</button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <div class="message-input-area">
+        <div class="input-row">
+            <input type="text" id="messageInput" placeholder="Введите сообщение...">
+            <button id="sendBtn">Отправить</button>
+        </div>
+        <div class="action-buttons">
+            <button id="recordBtn">🎙️</button>
+            <button id="attachBtn">📎</button>
+        </div>
+    </div>
+    
+    <div id="recordingIndicator" style="display: none;">
+        🔴 Идёт запись... <span id="recordTimer">0:00</span>
+        <button onclick="stopRecording()">Остановить</button>
+    </div>
+</div>
+
+<script>
+    var chatId = {{ chat_id }};
+    var currentUserId = {{ session.user_id }};
+    var lastMessageId = {{ messages[-1].id if messages else 0 }};
+    var messagesDiv = document.getElementById('messages');
+    
+    function scrollToBottom() {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+    scrollToBottom();
+    
+    var isUserScrolling = false;
+    var scrollTimeout;
+    messagesDiv.addEventListener('scroll', function() {
+        isUserScrolling = true;
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(function() { isUserScrolling = false; }, 500);
+    });
+    
+    function scrollToBottomIfNeeded() {
+        if (!isUserScrolling) messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+    
+    // Редактирование
+    window.editMessage = function(msgId) {
+        var msgDiv = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .message-text`);
+        if (!msgDiv) return;
+        var oldText = msgDiv.innerText;
+        var newText = prompt("Редактировать сообщение:", oldText);
+        if (newText && newText.trim() !== oldText) {
+            fetch('/edit_message/' + msgId, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({content: newText})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    msgDiv.innerText = data.content;
+                    var bubble = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .message-content`);
+                    if (!bubble.querySelector('.edited-badge')) {
+                        var badge = document.createElement('span');
+                        badge.className = 'edited-badge';
+                        badge.innerText = '(ред.)';
+                        bubble.appendChild(badge);
+                    }
+                }
+            });
+        }
+    };
+    
+    // Удаление сообщения
+    window.deleteMessage = function(msgId) {
+        if (confirm("Удалить это сообщение?")) {
+            fetch('/delete_message/' + msgId, {method: 'POST'})
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    document.querySelector(`.message-wrapper[data-msg-id="${msgId}"]`).remove();
+                }
+            });
+        }
+    };
+    
+    // Удаление чата
+    window.deleteChat = function() {
+        if (confirm("Удалить весь чат? Восстановить будет невозможно!")) {
+            fetch('/delete_chat/' + chatId, {method: 'POST'})
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') window.location.href = '/chats';
+            });
+        }
+    };
+    
+    // Реакции
+    window.toggleReaction = function(msgId, emoji) {
+        fetch('/add_reaction/' + msgId, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({emoji: emoji})
+        })
+        .then(response => response.json())
+        .then(data => updateReactionsDisplay(msgId, data.reactions));
+    };
+    
+    window.showReactionPicker = function(msgId) {
+        var emojis = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉', '💯'];
+        var picker = document.createElement('div');
+        picker.className = 'reaction-picker';
+        emojis.forEach(emoji => {
+            var btn = document.createElement('button');
+            btn.innerText = emoji;
+            btn.onclick = () => { toggleReaction(msgId, emoji); picker.remove(); };
+            picker.appendChild(btn);
+        });
+        var btn = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .add-reaction-btn`);
+        if (btn) {
+            btn.parentElement.appendChild(picker);
+            setTimeout(() => picker.remove(), 3000);
+        }
+    };
+    
+    function updateReactionsDisplay(msgId, reactions) {
+        var container = document.getElementById('reactions-' + msgId);
+        if (!container) return;
+        container.innerHTML = '';
+        reactions.forEach(r => {
+            var span = document.createElement('span');
+            span.className = 'reaction';
+            span.innerText = r.emoji;
+            span.onclick = () => toggleReaction(msgId, r.emoji);
+            container.appendChild(span);
+        });
+        var addBtn = document.createElement('button');
+        addBtn.className = 'add-reaction-btn';
+        addBtn.innerText = '➕';
+        addBtn.onclick = () => showReactionPicker(msgId);
+        container.appendChild(addBtn);
+    }
+    
+    // Отправка
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    
+    sendBtn.addEventListener('click', () => {
+        const content = messageInput.value.trim();
+        if (content) {
+            fetch('/send_message/' + chatId, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'content=' + encodeURIComponent(content)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                appendMessage(data);
+                lastMessageId = data.id;
+                messageInput.value = '';
+                scrollToBottomIfNeeded();
+            });
+        }
+    });
+    
+    // Прикрепление
+    const attachBtn = document.getElementById('attachBtn');
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*,video/*,audio/*';
+    fileInput.style.display = 'none';
+    document.body.appendChild(fileInput);
+    
+    attachBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+        const file = fileInput.files[0];
+        if (file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            fetch('/send_message/' + chatId, { method: 'POST', body: formData })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) { alert(data.error); return; }
+                appendMessage(data);
+                lastMessageId = data.id;
+                scrollToBottomIfNeeded();
+                fileInput.value = '';
+            });
+        }
+    });
+    
+    // Голосовые
+    let mediaRecorder, audioChunks = [], recordingTimer, seconds = 0;
+    const recordBtn = document.getElementById('recordBtn');
+    const recordingIndicator = document.getElementById('recordingIndicator');
+    const recordTimerSpan = document.getElementById('recordTimer');
+    
+    async function startRecording() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                const file = new File([audioBlob], 'voice.webm', { type: 'audio/webm' });
+                const formData = new FormData();
+                formData.append('file', file);
+                fetch('/send_message/' + chatId, { method: 'POST', body: formData })
+                .then(response => response.json())
+                .then(data => { if (!data.error) { appendMessage(data); scrollToBottomIfNeeded(); } });
+                stream.getTracks().forEach(track => track.stop());
+                recordingIndicator.style.display = 'none';
+                clearInterval(recordingTimer);
+                seconds = 0;
+                recordTimerSpan.innerText = '0:00';
+                recordBtn.style.background = '';
+            };
+            mediaRecorder.start();
+            recordingIndicator.style.display = 'flex';
+            recordBtn.style.background = '#ff4444';
+            recordingTimer = setInterval(() => {
+                seconds++;
+                const mins = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                recordTimerSpan.innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
+            }, 1000);
+        } catch (err) { alert('Микрофон не доступен'); }
+    }
+    
+    function stopRecording() {
+        if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+    }
+    
+    recordBtn.addEventListener('click', () => {
+        if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
+        else startRecording();
+    });
+    
+    function appendMessage(msg) {
+        var msgDiv = document.createElement('div');
+        msgDiv.className = 'message-wrapper ' + (msg.sender_id == currentUserId ? 'my-message' : 'other-message');
+        msgDiv.setAttribute('data-msg-id', msg.id);
+        var bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+        
+        if (msg.sender_id != currentUserId && {{ 'true' if chat.type == 'group' else 'false' }}) {
+            var senderDiv = document.createElement('div');
+            senderDiv.className = 'message-sender';
+            senderDiv.textContent = msg.sender_name;
+            bubble.appendChild(senderDiv);
+        }
+        
+        var contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        if (msg.file_type === 'image') {
+            var img = document.createElement('img');
+            img.src = msg.file_url;
+            img.style.maxWidth = '200px';
+            img.onclick = () => window.open(img.src);
+            contentDiv.appendChild(img);
+        } else if (msg.file_type === 'video') {
+            var video = document.createElement('video');
+            video.controls = true;
+            video.style.maxWidth = '200px';
+            var source = document.createElement('source');
+            source.src = msg.file_url;
+            video.appendChild(source);
+            contentDiv.appendChild(video);
+        } else if (msg.file_type === 'audio') {
+            var audio = document.createElement('audio');
+            audio.controls = true;
+            audio.style.maxWidth = '200px';
+            var source = document.createElement('source');
+            source.src = msg.file_url;
+            audio.appendChild(source);
+            contentDiv.appendChild(audio);
+        } else {
+            var textDiv = document.createElement('div');
+            textDiv.className = 'message-text';
+            textDiv.textContent = msg.content;
+            contentDiv.appendChild(textDiv);
+            if (msg.is_edited) {
+                var badge = document.createElement('span');
+                badge.className = 'edited-badge';
+                badge.innerText = '(ред.)';
+                contentDiv.appendChild(badge);
+            }
+        }
+        bubble.appendChild(contentDiv);
+        
+        var footerDiv = document.createElement('div');
+        footerDiv.className = 'message-footer';
+        var timeDiv = document.createElement('div');
+        timeDiv.className = 'message-time';
+        timeDiv.textContent = msg.timestamp;
+        footerDiv.appendChild(timeDiv);
+        
+        if (msg.sender_id == currentUserId) {
+            var actionsDiv = document.createElement('div');
+            actionsDiv.className = 'message-actions';
+            var editBtn = document.createElement('button');
+            editBtn.className = 'edit-msg-btn';
+            editBtn.innerText = '✏️';
+            editBtn.onclick = () => editMessage(msg.id);
+            var delBtn = document.createElement('button');
+            delBtn.className = 'delete-msg-btn';
+            delBtn.innerText = '🗑️';
+            delBtn.onclick = () => deleteMessage(msg.id);
+            actionsDiv.appendChild(editBtn);
+            actionsDiv.appendChild(delBtn);
+            footerDiv.appendChild(actionsDiv);
+        }
+        bubble.appendChild(footerDiv);
+        
+        var reactionsDiv = document.createElement('div');
+        reactionsDiv.className = 'message-reactions';
+        reactionsDiv.id = 'reactions-' + msg.id;
+        if (msg.reactions) {
+            msg.reactions.forEach(r => {
+                var span = document.createElement('span');
+                span.className = 'reaction';
+                span.innerText = r.emoji;
+                span.onclick = () => toggleReaction(msg.id, r.emoji);
+                reactionsDiv.appendChild(span);
+            });
+        }
+        var addBtn = document.createElement('button');
+        addBtn.className = 'add-reaction-btn';
+        addBtn.innerText = '➕';
+        addBtn.onclick = () => showReactionPicker(msg.id);
+        reactionsDiv.appendChild(addBtn);
+        bubble.appendChild(reactionsDiv);
+        
+        msgDiv.appendChild(bubble);
+        messagesDiv.appendChild(msgDiv);
+        scrollToBottomIfNeeded();
+    }
+    
+    function pollNewMessages() {
+        fetch('/get_new_messages/' + chatId + '?last_id=' + lastMessageId)
+        .then(response => response.json())
+        .then(messages => {
+            messages.forEach(msg => {
+                appendMessage(msg);
+                lastMessageId = msg.id;
+            });
+            scrollToBottomIfNeeded();
+        });
+    }
+    setInterval(pollNewMessages, 3000);
+</script>
+{% endblock %}
