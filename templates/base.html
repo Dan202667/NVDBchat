@@ -2,92 +2,37 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>NVDBchat</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="manifest" href="/static/manifest.json">
 </head>
-<body class="{% if session.get('theme') == 'dark' %}dark{% endif %}">
-    <div id="app">
-        {% block content %}{% endblock %}
-    </div>
-    
-    <!-- Боковое меню -->
-    <div id="sideMenuOverlay" class="side-menu-overlay" onclick="closeSideMenu()"></div>
-    <div id="sideMenu" class="side-menu">
-        <div class="side-menu-header">
-            <div class="side-menu-avatar" id="sideMenuAvatar">👤</div>
-            <div class="side-menu-info">
-                <div class="side-menu-name" id="sideMenuName">{{ session.get('name', 'Гость') }}</div>
-                <div class="side-menu-username" id="sideMenuUsername">@{{ session.get('username', '') }}</div>
+<body>
+    <div class="container">
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            <ul class="flashes">
+            {% for message in messages %}
+              <li>{{ message }}</li>
+            {% endfor %}
+            </ul>
+          {% endif %}
+        {% endwith %}
+        
+        {% block header %}
+        <div class="app-header">
+            <h1>NVDBchat</h1>
+            <div>
+                {% if session.user_id %}
+                    <span style="color:#8696a0; margin-right:15px;">{{ session.username }}</span>
+                    <a href="{{ url_for('chats') }}">Чаты</a>
+                    <a href="{{ url_for('profile') }}">Профиль</a>
+                    <a href="{{ url_for('logout') }}">Выйти</a>
+                {% endif %}
             </div>
         </div>
-        <div class="side-menu-item" onclick="navigateTo('/chats')">
-            <span>💬</span> Чаты
-        </div>
-        <div class="side-menu-item" onclick="navigateTo('/profile')">
-            <span>👤</span> Профиль
-        </div>
-        <div class="side-menu-item" onclick="navigateTo('/settings')">
-            <span>⚙️</span> Настройки
-        </div>
-        <div class="side-menu-divider"></div>
-        <div class="side-menu-item" id="themeToggleBtn">
-            <span>🌙</span> Тёмная тема
-        </div>
-        <div class="side-menu-divider"></div>
-        <div class="side-menu-item" onclick="logout()">
-            <span>🚪</span> Выйти
-        </div>
+        {% endblock %}
+        
+        {% block content %}{% endblock %}
     </div>
-
-    <script>
-        // Боковое меню
-        function openSideMenu() {
-            document.getElementById('sideMenu').classList.add('open');
-            document.getElementById('sideMenuOverlay').classList.add('open');
-        }
-        
-        function closeSideMenu() {
-            document.getElementById('sideMenu').classList.remove('open');
-            document.getElementById('sideMenuOverlay').classList.remove('open');
-        }
-        
-        function navigateTo(url) {
-            window.location.href = url;
-        }
-        
-        function logout() {
-            fetch('/logout', { method: 'POST' }).then(() => window.location.href = '/');
-        }
-        
-        // Тёмная тема
-        const themeToggle = document.getElementById('themeToggleBtn');
-        if (themeToggle) {
-            themeToggle.addEventListener('click', () => {
-                document.body.classList.toggle('dark');
-                const isDark = document.body.classList.contains('dark');
-                fetch('/set_theme', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ theme: isDark ? 'dark' : 'light' })
-                });
-            });
-        }
-        
-        // Тактильный отклик (если поддерживается)
-        function hapticFeedback() {
-            if (window.navigator && window.navigator.vibrate) {
-                window.navigator.vibrate(10);
-            }
-        }
-        
-        // Добавляем haptic на клики
-        document.addEventListener('click', function(e) {
-            if (e.target.closest('.chat-item, .message-wrapper, button, .side-menu-item')) {
-                hapticFeedback();
-            }
-        });
-    </script>
 </body>
 </html>
