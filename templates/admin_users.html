@@ -1,16 +1,4 @@
 {% extends "base.html" %}
-{% block header %}
-<div class="app-header">
-    <h1>NVDBchat</h1>
-    <div>
-        <span style="color:#8696a0; margin-right:15px;">{{ session.username }}</span>
-        <a href="{{ url_for('chats') }}">Чаты</a>
-        <a href="{{ url_for('profile') }}">Профиль</a>
-        <a href="{{ url_for('logout') }}">Выйти</a>
-    </div>
-</div>
-{% endblock %}
-
 {% block content %}
 <div style="padding: 20px;">
     <h2 style="color: #00a884; margin-bottom: 20px;">👑 Админ-панель</h2>
@@ -23,8 +11,6 @@
                     <th style="padding: 12px; text-align: left;">ID</th>
                     <th style="padding: 12px; text-align: left;">Имя</th>
                     <th style="padding: 12px; text-align: left;">@username</th>
-                    <th style="padding: 12px; text-align: left;">Аватар</th>
-                    <th style="padding: 12px; text-align: left;">Статус</th>
                     <th style="padding: 12px; text-align: left;">Регистрация</th>
                 </tr>
             </thead>
@@ -34,8 +20,6 @@
                     <td style="padding: 10px;">{{ user.id }}</td>
                     <td style="padding: 10px;">{{ user.name }}</td>
                     <td style="padding: 10px; color: #00a884;">@{{ user.username if user.username else 'не задан' }}</td>
-                    <td style="padding: 10px;">{% if user.avatar_url %}✅{% else %}❌{% endif %}</td>
-                    <td style="padding: 10px;">{% if user.is_online %}🟢 Онлайн{% else %}⚫ Офлайн{% endif %}</td>
                     <td style="padding: 10px;">{{ user.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
                 </tr>
                 {% endfor %}
