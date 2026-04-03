@@ -616,19 +616,6 @@ def admin_users():
     users = User.query.all()
     return render_template('admin_users.html', users=users)
 
-@app.route('/register_token', methods=['POST'])
-def register_token():
-    if 'user_id' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-    data = request.get_json()
-    token = data.get('token')
-    if token:
-        user = User.query.get(session['user_id'])
-        user.onesignal_user_id = token
-        db.session.commit()
-        return jsonify({'status': 'ok'})
-    return jsonify({'error': 'No token'}), 400
-
 # ==================== ВРЕМЕННЫЙ МАРШРУТ ДЛЯ ОБНОВЛЕНИЯ БД ====================
 @app.route('/fix_db_v2')
 def fix_db_v2():
