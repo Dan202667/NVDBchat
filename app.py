@@ -22,12 +22,12 @@ cloudinary.config(
     api_secret=os.environ.get('CLOUDINARY_API_SECRET', 'xf42h1mQQKprlwl0dujXHUpX7Ow')
 )
 
-# Настройка OneSignal (временно отключена)
+# OneSignal временно отключён
 ONESIGNAL_APP_ID = "effc2b7e-2a19-4666-a270-4f413081d020"
 ONESIGNAL_REST_API_KEY = os.environ.get('ONESIGNAL_REST_API_KEY', '')
 
 def send_onesignal_notification(user_id, title, body):
-    pass  # Временно отключено
+    pass  # отключено
 
 db = SQLAlchemy(app)
 
@@ -62,7 +62,8 @@ class ChatParticipant(db.Model):
     chat_id = db.Column(db.Integer, db.ForeignKey('chats.id', ondelete='CASCADE'))
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'))
     joined_at = db.Column(db.DateTime, default=datetime.utcnow)
-    last_read_message_id = db.Column(db.Integer, default=0)
+    # Поле last_read_message_id временно убрано, чтобы избежать ошибок
+    # last_read_message_id = db.Column(db.Integer, default=0)
 
 class Message(db.Model):
     __tablename__ = 'messages'
@@ -138,7 +139,8 @@ def get_user_chats(user_id):
             setattr(chat, 'other_avatar', None)
             setattr(chat, 'other_online', False)
         last_msg = Message.query.filter_by(chat_id=chat.id).order_by(Message.timestamp.desc()).first()
-        unread_count = Message.query.filter(Message.chat_id == chat.id, Message.id > (ChatParticipant.last_read_message_id if ChatParticipant else 0), Message.sender_id != user_id).count()
+        # Временно убираем подсчёт непрочитанных
+        unread_count = 0
         setattr(chat, 'display_name', display_name)
         setattr(chat, 'last_message', last_msg)
         setattr(chat, 'unread_count', unread_count)
@@ -447,6 +449,18 @@ def admin_users():
         return redirect(url_for('profile'))
     users = User.query.all()
     return render_template('admin_users.html', users=users)
+
+# Временный маршрут для добавления колонок (на будущее)
+@app.route('/fix_db')
+def fix_db():
+    from sqlalchemy import text
+    try:
+        with db.engine.connect() as conn:
+            conn.execute(text("ALTER TABLE chat_participants ADD COLUMN IF NOT EXISTS last_read_message_id INTEGER DEFAULT 0"))
+            conn.commit()
+        return "✅ Колонка добавлена (если её не было)."
+    except Exception as e:
+        return f"Ошибка: {e}"
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
