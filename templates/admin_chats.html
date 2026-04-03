@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="padding:20px">
+    <h2>Чаты</h2>
+    <table style="width:100%">
+        <thead><tr><th>ID</th><th>Тип</th><th>Название</th><th>Создан</th><th>Действие</th></tr></thead>
+        <tbody>
+            {% for chat in chats %}
+            <tr>
+                <td>{{ chat.id }}</td>
+                <td>{{ chat.type }}</td>
+                <td>{{ chat.name or '—' }}</td>
+                <td>{{ chat.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('admin_chat_delete', chat_id=chat.id) }}" onsubmit="return confirm('Удалить чат?');">
+                        <button class="btn-small">Удалить</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <a href="{{ url_for('admin_dashboard') }}">← Назад</a>
+</div>
+{% endblock %}
