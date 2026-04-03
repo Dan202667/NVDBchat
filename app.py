@@ -86,7 +86,6 @@ class SystemSetting(db.Model):
 
 with app.app_context():
     db.create_all()
-    # Создаём настройку "registration_enabled" если нет
     if not SystemSetting.query.filter_by(key='registration_enabled').first():
         db.session.add(SystemSetting(key='registration_enabled', value='true'))
         db.session.commit()
@@ -178,7 +177,6 @@ def login_page():
 def register_page():
     if 'user_id' in session:
         return redirect(url_for('chats'))
-    # Проверяем, включена ли регистрация
     setting = SystemSetting.query.filter_by(key='registration_enabled').first()
     if setting and setting.value == 'false':
         flash('Регистрация временно закрыта администратором', 'warning')
@@ -187,7 +185,6 @@ def register_page():
 
 @app.route('/register', methods=['POST'])
 def register():
-    # Проверка регистрации
     setting = SystemSetting.query.filter_by(key='registration_enabled').first()
     if setting and setting.value == 'false':
         flash('Регистрация временно закрыта', 'warning')
@@ -221,8 +218,248 @@ def login():
     flash('Неверное имя или пароль')
     return redirect(url_for('login_page'))
 
-# ... (остальные маршруты chats, chat, send_message и т.д. остаются без изменений, как в стабильной версии)
-# Для краткости я пропущу дублирование, но предполагается, что они есть.
+@app.route('/create_profile', methods=['GET', 'POST'])
+def create_profile():
+    if 'temp_user_id' not in session:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        username = request.form['username'].lstrip('@')
+        existing = User.query.filter_by(username=username).first()
+        if existing:
+            flash('Этот @username уже занят')
+            return render_template('create_profile.html')
+        user = User.query.get(session['temp_user_id'])
+        user.username = username
+        if 'avatar' in request.files:
+            file = request.files['avatar']
+            if file.filename:
+                avatar_url, _ = upload_to_cloudinary(file, folder='nvdbchat/avatars')
+                if avatar_url:
+                    user.avatar_url = avatar_url
+        db.session.commit()
+        session['user_id'] = user.id
+        session['username'] = user.username
+        session.pop('temp_user_id', None)
+        update_user_online_status(user.id, True)
+        return redirect(url_for('chats'))
+    return render_template('create_profile.html')
+
+@app.route('/profile')
+def profile():
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+    user = User.query.get(session['user_id'])
+    return render_template('profile.html', user=user)
+
+@app.route('/upload_avatar', methods=['POST'])
+def upload_avatar():
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+    user = User.query.get(session['user_id'])
+    if 'avatar' in request.files:
+        file = request.files['avatar']
+        if file.filename:
+            avatar_url, _ = upload_to_cloudinary(file, folder='nvdbchat/avatars')
+            if avatar_url:
+                user.avatar_url = avatar_url
+                db.session.commit()
+                flash('Аватар обновлён')
+    return redirect(url_for('profile'))
+
+@app.route('/logout')
+def logout():
+    if 'user_id' in session:
+        update_user_online_status(session['user_id'], False)
+    session.clear()
+    return redirect(url_for('index'))
+
+@app.route('/chats')
+def chats():
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+    user_id = session['user_id']
+    chats_list = get_user_chats(user_id)
+    return render_template('chats.html', chats=chats_list)
+
+@app.route('/search_user', methods=['POST'])
+def search_user():
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+    username = request.form['username'].lstrip('@')
+    user = User.query.filter_by(username=username).first()
+    if not user:
+        flash('Пользователь не найден')
+        return redirect(url_for('chats'))
+    current_user_id = session['user_id']
+    if user.id == current_user_id:
+        flash('Нельзя начать чат с самим собой')
+        return redirect(url_for('chats'))
+    participations = ChatParticipant.query.filter_by(user_id=current_user_id).all()
+    current_user_chat_ids = [p.chat_id for p in participations]
+    target_participation = ChatParticipant.query.filter(ChatParticipant.chat_id.in_(current_user_chat_ids), ChatParticipant.user_id == user.id).first()
+    if target_participation:
+        chat_id = target_participation.chat_id
+    else:
+        new_chat = Chat(type='private')
+        db.session.add(new_chat)
+        db.session.flush()
+        db.session.add(ChatParticipant(chat_id=new_chat.id, user_id=current_user_id))
+        db.session.add(ChatParticipant(chat_id=new_chat.id, user_id=user.id))
+        db.session.commit()
+        chat_id = new_chat.id
+    return redirect(url_for('chat', chat_id=chat_id))
+
+@app.route('/chat/<int:chat_id>')
+def chat(chat_id):
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+    user_id = session['user_id']
+    participant = ChatParticipant.query.filter_by(chat_id=chat_id, user_id=user_id).first()
+    if not participant:
+        flash('Вы не участник этого чата')
+        return redirect(url_for('chats'))
+    chat_obj = Chat.query.get(chat_id)
+    messages = Message.query.filter_by(chat_id=chat_id).order_by(Message.timestamp).all()
+    for msg in messages:
+        sender = User.query.get(msg.sender_id)
+        msg.sender_name = sender.username or sender.name
+        msg.sender_avatar = sender.avatar_url
+        reactions = MessageReaction.query.filter_by(message_id=msg.id).all()
+        msg.reactions_list = [{'emoji': r.emoji, 'user_id': r.user_id} for r in reactions]
+    other_avatar = None
+    other_online = False
+    if chat_obj.type == 'private':
+        other = ChatParticipant.query.filter(ChatParticipant.chat_id == chat_id, ChatParticipant.user_id != user_id).first()
+        if other:
+            other_user = User.query.get(other.user_id)
+            chat_name = other_user.username or other_user.name
+            other_avatar = other_user.avatar_url
+            other_online = other_user.is_online
+        else:
+            chat_name = 'Личный чат'
+    else:
+        chat_name = chat_obj.name
+    all_chats = get_user_chats(user_id)
+    return render_template('chat.html', chat_id=chat_id, chat_name=chat_name, messages=messages, all_chats=all_chats, chat=chat_obj, other_avatar=other_avatar, other_online=other_online)
+
+@app.route('/send_message/<int:chat_id>', methods=['POST'])
+def send_message(chat_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 403
+    content = request.form.get('content', '')
+    file = request.files.get('file')
+    msg = Message(chat_id=chat_id, sender_id=session['user_id'])
+    if file and file.filename:
+        file_url, file_type = upload_to_cloudinary(file, folder='nvdbchat/uploads')
+        if file_url:
+            msg.file_url = file_url
+            msg.file_type = file_type
+            msg.content = content if content else None
+            db.session.add(msg)
+            db.session.commit()
+            sender = User.query.get(msg.sender_id)
+            return jsonify({'id': msg.id, 'content': msg.content, 'file_url': msg.file_url, 'file_type': msg.file_type, 'sender_id': msg.sender_id, 'sender_name': sender.username or sender.name, 'timestamp': msg.timestamp.strftime('%H:%M')}), 200
+    if content.strip():
+        msg.content = content
+        msg.file_type = 'text'
+        db.session.add(msg)
+        db.session.commit()
+        sender = User.query.get(msg.sender_id)
+        return jsonify({'id': msg.id, 'content': msg.content, 'file_type': 'text', 'sender_id': msg.sender_id, 'sender_name': sender.username or sender.name, 'timestamp': msg.timestamp.strftime('%H:%M')}), 200
+    return jsonify({'error': 'Empty message'}), 400
+
+@app.route('/edit_message/<int:message_id>', methods=['POST'])
+def edit_message(message_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    msg = Message.query.get(message_id)
+    if not msg or msg.sender_id != session['user_id']:
+        return jsonify({'error': 'Not allowed'}), 403
+    data = request.get_json()
+    new_content = data.get('content', '')
+    if new_content.strip():
+        msg.content = new_content
+        msg.is_edited = True
+        db.session.commit()
+        return jsonify({'status': 'ok', 'content': new_content})
+    return jsonify({'error': 'Empty content'}), 400
+
+@app.route('/delete_message/<int:message_id>', methods=['POST'])
+def delete_message(message_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    msg = Message.query.get(message_id)
+    if not msg or msg.sender_id != session['user_id']:
+        return jsonify({'error': 'Not allowed'}), 403
+    db.session.delete(msg)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+@app.route('/add_reaction/<int:message_id>', methods=['POST'])
+def add_reaction(message_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json()
+    emoji = data.get('emoji')
+    if not emoji:
+        return jsonify({'error': 'No emoji'}), 400
+    existing = MessageReaction.query.filter_by(message_id=message_id, user_id=session['user_id'], emoji=emoji).first()
+    if existing:
+        db.session.delete(existing)
+    else:
+        reaction = MessageReaction(message_id=message_id, user_id=session['user_id'], emoji=emoji)
+        db.session.add(reaction)
+    db.session.commit()
+    reactions = MessageReaction.query.filter_by(message_id=message_id).all()
+    result = [{'emoji': r.emoji, 'user_id': r.user_id} for r in reactions]
+    return jsonify({'reactions': result})
+
+@app.route('/delete_chat/<int:chat_id>', methods=['POST'])
+def delete_chat(chat_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    Message.query.filter_by(chat_id=chat_id).delete()
+    ChatParticipant.query.filter_by(chat_id=chat_id, user_id=session['user_id']).delete()
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+@app.route('/get_new_messages/<int:chat_id>')
+def get_new_messages(chat_id):
+    if 'user_id' not in session:
+        return jsonify([])
+    last_id = request.args.get('last_id', 0, type=int)
+    messages = Message.query.filter(Message.chat_id == chat_id, Message.id > last_id).order_by(Message.timestamp).all()
+    result = []
+    for msg in messages:
+        sender = User.query.get(msg.sender_id)
+        reactions = MessageReaction.query.filter_by(message_id=msg.id).all()
+        reactions_list = [{'emoji': r.emoji, 'user_id': r.user_id} for r in reactions]
+        result.append({'id': msg.id, 'content': msg.content, 'file_url': msg.file_url, 'file_type': msg.file_type, 'sender_id': msg.sender_id, 'sender_name': sender.username or sender.name, 'timestamp': msg.timestamp.strftime('%H:%M'), 'is_edited': msg.is_edited, 'reactions': reactions_list})
+    return jsonify(result)
+
+@app.route('/create_group', methods=['GET', 'POST'])
+def create_group():
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        group_name = request.form['group_name']
+        members_str = request.form['members']
+        usernames = [u.strip().lstrip('@') for u in members_str.split(',') if u.strip()]
+        current_user = User.query.get(session['user_id'])
+        if current_user.username not in usernames:
+            usernames.append(current_user.username)
+        users = User.query.filter(User.username.in_(usernames)).all()
+        if len(users) != len(usernames):
+            flash('Некоторые пользователи не найдены')
+            return render_template('create_group.html')
+        chat = Chat(type='group', name=group_name)
+        db.session.add(chat)
+        db.session.flush()
+        for user in users:
+            db.session.add(ChatParticipant(chat_id=chat.id, user_id=user.id))
+        db.session.commit()
+        return redirect(url_for('chat', chat_id=chat.id))
+    return render_template('create_group.html')
 
 # ==================== АДМИН-ПАНЕЛЬ ====================
 @app.route('/admin')
@@ -258,7 +495,7 @@ def admin_users():
 @admin_required
 def admin_user_ban(user_id):
     user = User.query.get(user_id)
-    if user and user.username != 'Dan':  # Нельзя забанить главного админа
+    if user and user.username != 'Dan':
         user.is_banned = not user.is_banned
         db.session.commit()
         flash(f'Пользователь {user.name} {"заблокирован" if user.is_banned else "разблокирован"}')
@@ -280,7 +517,6 @@ def admin_user_reset_password(user_id):
 def admin_user_delete(user_id):
     user = User.query.get(user_id)
     if user and user.username != 'Dan':
-        # Удаляем все сообщения пользователя, реакции, участников чатов
         MessageReaction.query.filter_by(user_id=user_id).delete()
         Message.query.filter_by(sender_id=user_id).delete()
         ChatParticipant.query.filter_by(user_id=user_id).delete()
@@ -343,7 +579,8 @@ def admin_settings_update():
         db.session.commit()
     flash('Настройки сохранены')
     return redirect(url_for('admin_settings'))
-# ========== ВРЕМЕННЫЙ МАРШРУТ ДЛЯ ОБНОВЛЕНИЯ БД ==========
+
+# ==================== ВСПОМОГАТЕЛЬНЫЙ МАРШРУТ ДЛЯ БАЗЫ ====================
 @app.route('/fix_db_all')
 def fix_db_all():
     from sqlalchemy import text
@@ -368,6 +605,7 @@ def fix_db_all():
         return "✅ База данных обновлена. Все недостающие колонки добавлены."
     except Exception as e:
         return f"❌ Ошибка: {e}"
+
 # ==================== ЗАПУСК ====================
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
