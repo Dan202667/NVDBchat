@@ -16,7 +16,11 @@
     <div class="chat-header">
         <div class="chat-avatar" style="width: 40px; height: 40px;">
             {% if chat.type == 'group' %}
-                👥
+                {% if chat.avatar_url %}
+                    <img src="{{ chat.avatar_url }}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                {% else %}
+                    👥
+                {% endif %}
             {% else %}
                 {% if other_avatar %}
                     <img src="{{ other_avatar }}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
@@ -39,8 +43,16 @@
                 {% endif %}
             </div>
         </div>
-        <button class="delete-chat-btn" onclick="deleteChat()">🗑️ Удалить чат</button>
+        <div class="chat-header-actions">
+            {% if chat.type == 'group' %}
+                <div class="chat-header-action" onclick="changeGroupPhoto()">🖼️</div>
+            {% endif %}
+            <div class="chat-header-action" onclick="openChatMenu()">⋮</div>
+            <button class="delete-chat-btn" onclick="deleteChat()">🗑️</button>
+        </div>
     </div>
+    
+    <div id="typingIndicator" class="typing-indicator" style="display: none; padding: 8px 16px; font-size: 13px; color: #8696a0; font-style: italic;"></div>
     
     <div class="messages-container" id="messages">
         {% for msg in messages %}
@@ -106,6 +118,8 @@
     var currentUserId = {{ session.user_id }};
     var lastMessageId = {{ messages[-1].id if messages else 0 }};
     var messagesDiv = document.getElementById('messages');
+    var typingIndicator = document.getElementById('typingIndicator');
+    var typingTimeout;
     
     function scrollToBottom() {
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -124,7 +138,54 @@
         if (!isUserScrolling) messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
     
-    // Редактирование
+    // ========== ИНДИКАТОР ПЕЧАТАЕТ ==========
+    function showTyping(senderName) {
+        typingIndicator.textContent = senderName + ' печатает...';
+        typingIndicator.style.display = 'block';
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+            typingIndicator.style.display = 'none';
+        }, 2000);
+    }
+    
+    // Отправка сигнала о начале печати
+    const messageInput = document.getElementById('messageInput');
+    let lastTypingTime = 0;
+    
+    messageInput.addEventListener('input', () => {
+        const now = Date.now();
+        if (now - lastTypingTime > 2000) {
+            lastTypingTime = now;
+            fetch('/typing/' + chatId, { method: 'POST' });
+        }
+    });
+    
+    // ========== СМЕНА ФОТО ГРУППЫ ==========
+    function changeGroupPhoto() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = () => {
+            const file = input.files[0];
+            if (file) {
+                const formData = new FormData();
+                formData.append('avatar', file);
+                fetch('/group/upload_avatar/' + chatId, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        location.reload();
+                    }
+                });
+            }
+        };
+        input.click();
+    }
+    
+    // ========== РЕДАКТИРОВАНИЕ ==========
     window.editMessage = function(msgId) {
         var msgDiv = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .message-text`);
         if (!msgDiv) return;
@@ -152,7 +213,7 @@
         }
     };
     
-    // Удаление сообщения
+    // ========== УДАЛЕНИЕ СООБЩЕНИЯ ==========
     window.deleteMessage = function(msgId) {
         if (confirm("Удалить это сообщение?")) {
             fetch('/delete_message/' + msgId, {method: 'POST'})
@@ -165,7 +226,7 @@
         }
     };
     
-    // Удаление чата
+    // ========== УДАЛЕНИЕ ЧАТА ==========
     window.deleteChat = function() {
         if (confirm("Удалить весь чат? Восстановить будет невозможно!")) {
             fetch('/delete_chat/' + chatId, {method: 'POST'})
@@ -176,7 +237,7 @@
         }
     };
     
-    // Реакции
+    // ========== РЕАКЦИИ ==========
     window.toggleReaction = function(msgId, emoji) {
         fetch('/add_reaction/' + msgId, {
             method: 'POST',
@@ -222,8 +283,7 @@
         container.appendChild(addBtn);
     }
     
-    // Отправка
-    const messageInput = document.getElementById('messageInput');
+    // ========== ОТПРАВКА СООБЩЕНИЙ ==========
     const sendBtn = document.getElementById('sendBtn');
     
     sendBtn.addEventListener('click', () => {
@@ -245,7 +305,7 @@
         }
     });
     
-    // Прикрепление
+    // ========== ПРИКРЕПЛЕНИЕ ФАЙЛОВ ==========
     const attachBtn = document.getElementById('attachBtn');
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
@@ -271,7 +331,7 @@
         }
     });
     
-    // Голосовые
+    // ========== ЗАПИСЬ ГОЛОСА ==========
     let mediaRecorder, audioChunks = [], recordingTimer, seconds = 0;
     const recordBtn = document.getElementById('recordBtn');
     const recordingIndicator = document.getElementById('recordingIndicator');
@@ -431,5 +491,9 @@
         });
     }
     setInterval(pollNewMessages, 3000);
+    
+    function openChatMenu() {
+        alert('Меню чата');
+    }
 </script>
 {% endblock %}
