@@ -49,6 +49,7 @@ class Chat(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     type = db.Column(db.String(10))
     name = db.Column(db.String(100))
+    avatar_url = db.Column(db.String(300), nullable=True)  # аватар группы
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class ChatParticipant(db.Model):
@@ -437,6 +438,7 @@ def get_new_messages(chat_id):
         result.append({'id': msg.id, 'content': msg.content, 'file_url': msg.file_url, 'file_type': msg.file_type, 'sender_id': msg.sender_id, 'sender_name': sender.username or sender.name, 'timestamp': msg.timestamp.strftime('%H:%M'), 'is_edited': msg.is_edited, 'reactions': reactions_list})
     return jsonify(result)
 
+# ==================== ГРУППОВЫЕ ФУНКЦИИ ====================
 @app.route('/create_group', methods=['GET', 'POST'])
 def create_group():
     if 'user_id' not in session:
@@ -460,6 +462,81 @@ def create_group():
         db.session.commit()
         return redirect(url_for('chat', chat_id=chat.id))
     return render_template('create_group.html')
+
+@app.route('/group/upload_avatar/<int:chat_id>', methods=['POST'])
+def group_upload_avatar(chat_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    chat = Chat.query.get(chat_id)
+    if not chat or chat.type != 'group':
+        return jsonify({'error': 'Not a group'}), 400
+    if 'avatar' in request.files:
+        file = request.files['avatar']
+        if file.filename:
+            avatar_url, _ = upload_to_cloudinary(file, folder='nvdbchat/group_avatars')
+            if avatar_url:
+                chat.avatar_url = avatar_url
+                db.session.commit()
+                return jsonify({'status': 'ok', 'avatar_url': avatar_url})
+    return jsonify({'error': 'Upload failed'}), 400
+
+@app.route('/get_contacts')
+def get_contacts():
+    if 'user_id' not in session:
+        return jsonify([])
+    user_id = session['user_id']
+    participations = ChatParticipant.query.filter_by(user_id=user_id).all()
+    chat_ids = [p.chat_id for p in participations]
+    chats = Chat.query.filter(Chat.id.in_(chat_ids), Chat.type == 'private').all()
+    contacts = []
+    for chat in chats:
+        other = ChatParticipant.query.filter(ChatParticipant.chat_id == chat.id, ChatParticipant.user_id != user_id).first()
+        if other:
+            other_user = User.query.get(other.user_id)
+            contacts.append({
+                'id': other_user.id,
+                'name': other_user.name,
+                'username': other_user.username,
+                'avatar_url': other_user.avatar_url
+            })
+    return jsonify(contacts)
+
+@app.route('/typing/<int:chat_id>', methods=['POST'])
+def typing(chat_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    return jsonify({'status': 'ok'})
+
+@app.route('/stop_typing/<int:chat_id>', methods=['POST'])
+def stop_typing(chat_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    return jsonify({'status': 'ok'})
+
+@app.route('/group/info/<int:chat_id>')
+def group_info(chat_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    chat = Chat.query.get(chat_id)
+    if not chat or chat.type != 'group':
+        return jsonify({'error': 'Not a group'}), 400
+    participants = ChatParticipant.query.filter_by(chat_id=chat_id).all()
+    members = []
+    for p in participants:
+        user = User.query.get(p.user_id)
+        members.append({
+            'id': user.id,
+            'name': user.name,
+            'username': user.username,
+            'avatar_url': user.avatar_url
+        })
+    return jsonify({
+        'id': chat.id,
+        'name': chat.name,
+        'avatar_url': chat.avatar_url,
+        'members': members,
+        'member_count': len(members)
+    })
 
 # ==================== АДМИН-ПАНЕЛЬ ====================
 @app.route('/admin')
@@ -580,33 +657,29 @@ def admin_settings_update():
     flash('Настройки сохранены')
     return redirect(url_for('admin_settings'))
 
-# ==================== ВСПОМОГАТЕЛЬНЫЙ МАРШРУТ ДЛЯ БАЗЫ ====================
+# ==================== ВСПОМОГАТЕЛЬНЫЙ МАРШРУТ ====================
 @app.route('/fix_db_all')
 def fix_db_all():
     from sqlalchemy import text
     try:
         with db.engine.connect() as conn:
-            # Таблица users
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMP DEFAULT NULL"))
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_online BOOLEAN DEFAULT FALSE"))
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE"))
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_folders TEXT DEFAULT NULL"))
-            # Таблица messages
             conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to INTEGER DEFAULT NULL"))
             conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS pinned BOOLEAN DEFAULT FALSE"))
             conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMP DEFAULT NULL"))
             conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS delete_at TIMESTAMP DEFAULT NULL"))
             conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS views INTEGER DEFAULT 0"))
-            # Таблица chat_participants
             conn.execute(text("ALTER TABLE chat_participants ADD COLUMN IF NOT EXISTS last_read_message_id INTEGER DEFAULT 0"))
-            # Таблица chats
             conn.execute(text("ALTER TABLE chats ADD COLUMN IF NOT EXISTS folder VARCHAR(50) DEFAULT 'Основные'"))
+            conn.execute(text("ALTER TABLE chats ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(300) DEFAULT NULL"))
             conn.commit()
         return "✅ База данных обновлена. Все недостающие колонки добавлены."
     except Exception as e:
         return f"❌ Ошибка: {e}"
 
-# ==================== ЗАПУСК ====================
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
