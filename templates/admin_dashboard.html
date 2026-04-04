@@ -20,15 +20,29 @@
         <div class="stat-card">🖼 Медиафайлов: {{ total_media }}</div>
         <div class="stat-card">🚫 Заблокировано: {{ banned_users }}</div>
     </div>
-    <div style="margin-top: 30px;">
-        <a href="{{ url_for('admin_users') }}" class="btn">👥 Пользователи</a>
-        <a href="{{ url_for('admin_messages') }}" class="btn">💬 Сообщения</a>
-        <a href="{{ url_for('admin_chats') }}" class="btn">💭 Чаты</a>
-        <a href="{{ url_for('admin_media') }}" class="btn">🖼 Медиа</a>
-        <a href="{{ url_for('admin_settings') }}" class="btn">⚙️ Настройки</a>
+    
+    <div style="margin-top: 30px; display: flex; flex-wrap: wrap; gap: 15px;">
+        <a href="{{ url_for('admin_users') }}" class="admin-btn">👥 Пользователи</a>
+        <a href="{{ url_for('admin_messages') }}" class="admin-btn">💬 Сообщения</a>
+        <a href="{{ url_for('admin_chats') }}" class="admin-btn">💭 Чаты</a>
+        <a href="{{ url_for('admin_media') }}" class="admin-btn">🖼 Медиа</a>
+        <a href="{{ url_for('admin_settings') }}" class="admin-btn">⚙️ Настройки</a>
     </div>
 </div>
 <style>
 .stat-card { background: #202c33; padding: 15px; border-radius: 12px; text-align: center; }
+.admin-btn {
+    background: #00a884;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 10px;
+    text-decoration: none;
+    font-weight: bold;
+    transition: background 0.2s;
+    display: inline-block;
+}
+.admin-btn:hover {
+    background: #008f72;
+}
 </style>
 {% endblock %}
