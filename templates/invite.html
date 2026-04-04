@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="auth-container">
+    <h2>Требуется код приглашения</h2>
+    <p>Для регистрации введите код приглашения.</p>
+    <form method="GET" action="{{ url_for('register_page') }}">
+        <div class="form-group">
+            <input type="text" name="code" placeholder="Код приглашения" required>
+        </div>
+        <button type="submit" class="btn">Продолжить</button>
+    </form>
+    <div style="text-align: center; margin-top: 15px;">
+        <a href="{{ url_for('index') }}">← На главную</a>
+    </div>
+</div>
+{% endblock %}
