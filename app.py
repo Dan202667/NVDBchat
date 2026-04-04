@@ -709,6 +709,85 @@ def admin_settings_update():
     flash('Настройки сохранены')
     return redirect(url_for('admin_settings'))
 
+# ==================== ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ ====================
+
+def get_setting(key, default='false'):
+    setting = SystemSetting.query.filter_by(key=key).first()
+    if setting:
+        return setting.value
+    return default
+
+def set_setting(key, value):
+    setting = SystemSetting.query.filter_by(key=key).first()
+    if setting:
+        setting.value = value
+    else:
+        setting = SystemSetting(key=key, value=value)
+        db.session.add(setting)
+    db.session.commit()
+
+@app.route('/admin/settings')
+@admin_required
+def admin_settings():
+    settings = {
+        'registration_enabled': get_setting('registration_enabled', 'true') == 'true',
+        'invite_only': get_setting('invite_only', 'false') == 'true',
+        'invite_code': get_setting('invite_code', 'NVDB2026'),
+        'maintenance_mode': get_setting('maintenance_mode', 'false') == 'true',
+        'enable_voice': get_setting('enable_voice', 'true') == 'true',
+        'enable_media': get_setting('enable_media', 'true') == 'true',
+        'enable_groups': get_setting('enable_groups', 'true') == 'true',
+        'max_login_attempts': int(get_setting('max_login_attempts', '5')),
+        'max_file_size_mb': int(get_setting('max_file_size_mb', '10')),
+        'messages_per_minute': int(get_setting('messages_per_minute', '0')),
+        'auto_delete_days': int(get_setting('auto_delete_days', '0')),
+        'blacklist': get_setting('blacklist', '')
+    }
+    return render_template('admin_settings.html', settings=settings)
+
+@app.route('/admin/settings/update', methods=['POST'])
+@admin_required
+def admin_settings_update():
+    set_setting('registration_enabled', 'true' if request.form.get('registration_enabled') else 'false')
+    set_setting('invite_only', 'true' if request.form.get('invite_only') else 'false')
+    set_setting('invite_code', request.form.get('invite_code', 'NVDB2026'))
+    set_setting('maintenance_mode', 'true' if request.form.get('maintenance_mode') else 'false')
+    set_setting('enable_voice', 'true' if request.form.get('enable_voice') else 'false')
+    set_setting('enable_media', 'true' if request.form.get('enable_media') else 'false')
+    set_setting('enable_groups', 'true' if request.form.get('enable_groups') else 'false')
+    set_setting('max_login_attempts', request.form.get('max_login_attempts', '5'))
+    set_setting('max_file_size_mb', request.form.get('max_file_size_mb', '10'))
+    set_setting('messages_per_minute', request.form.get('messages_per_minute', '0'))
+    set_setting('auto_delete_days', request.form.get('auto_delete_days', '0'))
+    set_setting('blacklist', request.form.get('blacklist', ''))
+    
+    flash('Настройки сохранены')
+    return redirect(url_for('admin_settings'))
+
+@app.route('/admin/clear_cache', methods=['POST'])
+@admin_required
+def admin_clear_cache():
+    # Здесь можно добавить очистку временных файлов
+    flash('Кеш очищен')
+    return jsonify({'message': 'Кеш очищен'})
+
+@app.route('/admin/backup_db')
+@admin_required
+def admin_backup_db():
+    import io
+    import csv
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['id', 'name', 'username', 'avatar_url', 'created_at', 'is_banned'])
+    
+    for user in User.query.all():
+        writer.writerow([user.id, user.name, user.username, user.avatar_url, user.created_at, user.is_banned])
+    
+    response = Response(output.getvalue(), mimetype='text/csv')
+    response.headers.set('Content-Disposition', 'attachment', filename='nvdbchat_backup.csv')
+    return response
+
 # ==================== ВСПОМОГАТЕЛЬНЫЙ МАРШРУТ ====================
 @app.route('/fix_db_all')
 def fix_db_all():
