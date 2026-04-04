@@ -27,7 +27,11 @@
             <a href="{{ url_for('chat', chat_id=chat.id) }}" class="chat-item">
                 <div class="chat-avatar">
                     {% if chat.type == 'group' %}
-                        👥
+                        {% if chat.avatar_url %}
+                            <img src="{{ chat.avatar_url }}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
+                        {% else %}
+                            👥
+                        {% endif %}
                     {% else %}
                         {% if chat.other_avatar %}
                             <img src="{{ chat.other_avatar }}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;">
@@ -37,12 +41,20 @@
                     {% endif %}
                 </div>
                 <div class="chat-info">
-                    <div class="chat-name">{{ chat.display_name }}</div>
+                    <div class="chat-name">
+                        {{ chat.display_name }}
+                        {% if chat.type == 'private' and chat.other_online %}
+                            <span class="online-dot">🟢</span>
+                        {% endif %}
+                    </div>
                     <div class="chat-last-msg">
                         {% if chat.last_message %}
                             {{ chat.last_message.content[:30] if chat.last_message.content else 'Файл' }}
                         {% else %}
                             Нет сообщений
+                        {% endif %}
+                        {% if chat.unread_count > 0 %}
+                            <span class="unread-badge">{{ chat.unread_count if chat.unread_count < 100 else '99+' }}</span>
                         {% endif %}
                     </div>
                 </div>
@@ -55,4 +67,25 @@
         </div>
     </div>
 </div>
+
+<style>
+.online-dot {
+    font-size: 0.7rem;
+    margin-left: 5px;
+}
+.unread-badge {
+    background: #00a884;
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+    margin-left: 8px;
+}
+</style>
 {% endblock %}
