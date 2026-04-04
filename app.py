@@ -142,8 +142,11 @@ def get_user_chats(user_id):
             setattr(chat, 'other_avatar', None)
             setattr(chat, 'other_online', False)
         last_msg = Message.query.filter_by(chat_id=chat.id).order_by(Message.timestamp.desc()).first()
+        # Добавляем unread_count (временно 0, пока не настроим полноценно)
+        unread_count = 0
         setattr(chat, 'display_name', display_name)
         setattr(chat, 'last_message', last_msg)
+        setattr(chat, 'unread_count', unread_count)
         result.append(chat)
     result.sort(key=lambda c: c.last_message.timestamp if c.last_message else datetime(1970, 1, 1), reverse=True)
     return result
