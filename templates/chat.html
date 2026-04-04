@@ -45,9 +45,8 @@
         </div>
         <div class="chat-header-actions">
             {% if chat.type == 'group' %}
-                <div class="chat-header-action" onclick="changeGroupPhoto()">🖼️</div>
+                <div class="chat-header-action" onclick="openChatMenu()">⋮</div>
             {% endif %}
-            <div class="chat-header-action" onclick="openChatMenu()">⋮</div>
             <button class="delete-chat-btn" onclick="deleteChat()">🗑️</button>
         </div>
     </div>
@@ -148,7 +147,6 @@
         }, 2000);
     }
     
-    // Отправка сигнала о начале печати
     const messageInput = document.getElementById('messageInput');
     let lastTypingTime = 0;
     
@@ -160,7 +158,53 @@
         }
     });
     
-    // ========== СМЕНА ФОТО ГРУППЫ ==========
+    // ========== МЕНЮ ГРУППЫ ==========
+    function openChatMenu() {
+        const menuHtml = `
+            <div id="groupMenu" class="group-menu" style="position: fixed; bottom: 0; left: 0; right: 0; background: #202c33; border-radius: 20px 20px 0 0; padding: 20px; z-index: 1000; animation: slideUp 0.2s ease;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <div style="width: 50px; height: 4px; background: #3b4a54; border-radius: 2px; margin: 0 auto;"></div>
+                </div>
+                <div class="menu-item" onclick="changeGroupName()">✏️ Изменить название</div>
+                <div class="menu-item" onclick="changeGroupPhoto()">🖼️ Сменить фото группы</div>
+                <div class="menu-item" onclick="viewGroupMembers()">👥 Участники группы</div>
+                <div class="menu-item" onclick="addGroupMember()">➕ Добавить участника</div>
+                <div class="menu-item" style="color: #ff4444;" onclick="leaveGroup()">🚪 Выйти из группы</div>
+                <div style="height: 10px;"></div>
+                <div class="menu-item" onclick="closeGroupMenu()">Отмена</div>
+            </div>
+            <div id="menuOverlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 999;" onclick="closeGroupMenu()"></div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', menuHtml);
+        document.body.style.overflow = 'hidden';
+    }
+    
+    function closeGroupMenu() {
+        document.getElementById('groupMenu')?.remove();
+        document.getElementById('menuOverlay')?.remove();
+        document.body.style.overflow = '';
+    }
+    
+    function changeGroupName() {
+        const newName = prompt('Введите новое название группы:');
+        if (newName && newName.trim()) {
+            fetch('/group/change_name/' + chatId, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + (data.error || 'Не удалось изменить название'));
+                }
+            });
+        }
+        closeGroupMenu();
+    }
+    
     function changeGroupPhoto() {
         const input = document.createElement('input');
         input.type = 'file';
@@ -183,6 +227,56 @@
             }
         };
         input.click();
+        closeGroupMenu();
+    }
+    
+    function viewGroupMembers() {
+        fetch('/group/info/' + chatId)
+            .then(response => response.json())
+            .then(data => {
+                let membersList = '';
+                data.members.forEach(m => {
+                    membersList += `${m.name} (@${m.username})\n`;
+                });
+                alert('Участники группы:\n' + membersList);
+            });
+        closeGroupMenu();
+    }
+    
+    function addGroupMember() {
+        const username = prompt('Введите @username пользователя для добавления:');
+        if (username) {
+            fetch('/group/add_member/' + chatId, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    alert('Пользователь добавлен');
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + (data.error || 'Пользователь не найден'));
+                }
+            });
+        }
+        closeGroupMenu();
+    }
+    
+    function leaveGroup() {
+        if (confirm('Вы уверены, что хотите выйти из группы?')) {
+            fetch('/group/leave/' + chatId, { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    window.location.href = '/chats';
+                } else {
+                    alert('Ошибка: ' + (data.error || 'Не удалось выйти из группы'));
+                }
+            });
+        }
+        closeGroupMenu();
     }
     
     // ========== РЕДАКТИРОВАНИЕ ==========
@@ -491,9 +585,24 @@
         });
     }
     setInterval(pollNewMessages, 3000);
-    
-    function openChatMenu() {
-        alert('Меню чата');
-    }
 </script>
+
+<style>
+/* Стили для меню группы */
+.group-menu .menu-item {
+    padding: 15px;
+    text-align: center;
+    font-size: 17px;
+    cursor: pointer;
+    border-radius: 12px;
+    transition: background 0.2s;
+}
+.group-menu .menu-item:hover {
+    background: #2a3942;
+}
+@keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+</style>
 {% endblock %}
