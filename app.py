@@ -49,7 +49,7 @@ class Chat(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     type = db.Column(db.String(10))
     name = db.Column(db.String(100))
-    avatar_url = db.Column(db.String(300), nullable=True)  # аватар группы
+    avatar_url = db.Column(db.String(300), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class ChatParticipant(db.Model):
@@ -438,7 +438,7 @@ def get_new_messages(chat_id):
         result.append({'id': msg.id, 'content': msg.content, 'file_url': msg.file_url, 'file_type': msg.file_type, 'sender_id': msg.sender_id, 'sender_name': sender.username or sender.name, 'timestamp': msg.timestamp.strftime('%H:%M'), 'is_edited': msg.is_edited, 'reactions': reactions_list})
     return jsonify(result)
 
-# ==================== ГРУППОВЫЕ ФУНКЦИИ ====================
+# ==================== ГРУППОВЫЕ МАРШРУТЫ ====================
 @app.route('/create_group', methods=['GET', 'POST'])
 def create_group():
     if 'user_id' not in session:
@@ -480,6 +480,80 @@ def group_upload_avatar(chat_id):
                 return jsonify({'status': 'ok', 'avatar_url': avatar_url})
     return jsonify({'error': 'Upload failed'}), 400
 
+@app.route('/group/change_name/<int:chat_id>', methods=['POST'])
+def group_change_name(chat_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    chat = Chat.query.get(chat_id)
+    if not chat or chat.type != 'group':
+        return jsonify({'error': 'Not a group'}), 400
+    data = request.get_json()
+    new_name = data.get('name')
+    if new_name:
+        chat.name = new_name
+        db.session.commit()
+        return jsonify({'status': 'ok'})
+    return jsonify({'error': 'No name provided'}), 400
+
+@app.route('/group/add_member/<int:chat_id>', methods=['POST'])
+def group_add_member(chat_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    chat = Chat.query.get(chat_id)
+    if not chat or chat.type != 'group':
+        return jsonify({'error': 'Not a group'}), 400
+    data = request.get_json()
+    username = data.get('username', '').lstrip('@')
+    user = User.query.filter_by(username=username).first()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    existing = ChatParticipant.query.filter_by(chat_id=chat_id, user_id=user.id).first()
+    if existing:
+        return jsonify({'error': 'User already in group'}), 400
+    db.session.add(ChatParticipant(chat_id=chat_id, user_id=user.id))
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+@app.route('/group/leave/<int:chat_id>', methods=['POST'])
+def group_leave(chat_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    chat = Chat.query.get(chat_id)
+    if not chat or chat.type != 'group':
+        return jsonify({'error': 'Not a group'}), 400
+    ChatParticipant.query.filter_by(chat_id=chat_id, user_id=session['user_id']).delete()
+    db.session.commit()
+    remaining = ChatParticipant.query.filter_by(chat_id=chat_id).count()
+    if remaining == 0:
+        db.session.delete(chat)
+        db.session.commit()
+    return jsonify({'status': 'ok'})
+
+@app.route('/group/info/<int:chat_id>')
+def group_info(chat_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    chat = Chat.query.get(chat_id)
+    if not chat or chat.type != 'group':
+        return jsonify({'error': 'Not a group'}), 400
+    participants = ChatParticipant.query.filter_by(chat_id=chat_id).all()
+    members = []
+    for p in participants:
+        user = User.query.get(p.user_id)
+        members.append({
+            'id': user.id,
+            'name': user.name,
+            'username': user.username,
+            'avatar_url': user.avatar_url
+        })
+    return jsonify({
+        'id': chat.id,
+        'name': chat.name,
+        'avatar_url': chat.avatar_url,
+        'members': members,
+        'member_count': len(members)
+    })
+
 @app.route('/get_contacts')
 def get_contacts():
     if 'user_id' not in session:
@@ -512,31 +586,6 @@ def stop_typing(chat_id):
     if 'user_id' not in session:
         return jsonify({'error': 'Unauthorized'}), 401
     return jsonify({'status': 'ok'})
-
-@app.route('/group/info/<int:chat_id>')
-def group_info(chat_id):
-    if 'user_id' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-    chat = Chat.query.get(chat_id)
-    if not chat or chat.type != 'group':
-        return jsonify({'error': 'Not a group'}), 400
-    participants = ChatParticipant.query.filter_by(chat_id=chat_id).all()
-    members = []
-    for p in participants:
-        user = User.query.get(p.user_id)
-        members.append({
-            'id': user.id,
-            'name': user.name,
-            'username': user.username,
-            'avatar_url': user.avatar_url
-        })
-    return jsonify({
-        'id': chat.id,
-        'name': chat.name,
-        'avatar_url': chat.avatar_url,
-        'members': members,
-        'member_count': len(members)
-    })
 
 # ==================== АДМИН-ПАНЕЛЬ ====================
 @app.route('/admin')
