@@ -1,16 +1,20 @@
 import os
 import uuid
 import secrets
+import json
 from datetime import datetime, timedelta
+from io import StringIO, BytesIO
+import csv
 import cloudinary
 import cloudinary.uploader
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 import requests
+from pywebpush import webpush, WebPushException
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key-change-in-production'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production')
 
 # Настройка базы данных
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///database.db')
@@ -22,6 +26,11 @@ cloudinary.config(
     api_key=os.environ.get('CLOUDINARY_API_KEY', '816413685482328'),
     api_secret=os.environ.get('CLOUDINARY_API_SECRET', 'xf42h1mQQKprlwl0dujXHUpX7Ow')
 )
+
+# VAPID ключи для уведомлений (сгенерируй свои)
+VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
+VAPID_CLAIMS = {"sub": "mailto:nvdbchat@example.com"}
 
 db = SQLAlchemy(app)
 
@@ -37,6 +46,7 @@ class User(db.Model):
     is_online = db.Column(db.Boolean, default=False)
     is_banned = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    subscription = db.Column(db.Text, nullable=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -87,9 +97,25 @@ class SystemSetting(db.Model):
 
 with app.app_context():
     db.create_all()
-    if not SystemSetting.query.filter_by(key='registration_enabled').first():
-        db.session.add(SystemSetting(key='registration_enabled', value='true'))
-        db.session.commit()
+    # Создаём настройки по умолчанию
+    default_settings = [
+        ('registration_enabled', 'true'),
+        ('invite_only', 'false'),
+        ('invite_code', 'NVDB2026'),
+        ('maintenance_mode', 'false'),
+        ('enable_voice', 'true'),
+        ('enable_media', 'true'),
+        ('enable_groups', 'true'),
+        ('max_login_attempts', '5'),
+        ('max_file_size_mb', '10'),
+        ('messages_per_minute', '0'),
+        ('auto_delete_days', '0'),
+        ('blacklist', '')
+    ]
+    for key, value in default_settings:
+        if not SystemSetting.query.filter_by(key=key).first():
+            db.session.add(SystemSetting(key=key, value=value))
+    db.session.commit()
     print("✅ Таблицы базы данных созданы")
 
 # ==================== ФУНКЦИИ ====================
@@ -142,7 +168,6 @@ def get_user_chats(user_id):
             setattr(chat, 'other_avatar', None)
             setattr(chat, 'other_online', False)
         last_msg = Message.query.filter_by(chat_id=chat.id).order_by(Message.timestamp.desc()).first()
-        # Добавляем unread_count (временно 0, пока не настроим полноценно)
         unread_count = 0
         setattr(chat, 'display_name', display_name)
         setattr(chat, 'last_message', last_msg)
@@ -163,9 +188,50 @@ def admin_required(f):
     wrapper.__name__ = f.__name__
     return wrapper
 
+def get_setting(key, default='false'):
+    setting = SystemSetting.query.filter_by(key=key).first()
+    if setting:
+        return setting.value
+    return default
+
+def set_setting(key, value):
+    setting = SystemSetting.query.filter_by(key=key).first()
+    if setting:
+        setting.value = value
+    else:
+        setting = SystemSetting(key=key, value=value)
+        db.session.add(setting)
+    db.session.commit()
+
+def is_user_blacklisted(username):
+    blacklist = get_setting('blacklist', '')
+    blocked = [u.strip().lower() for u in blacklist.split(',') if u.strip()]
+    return username.lower() in blocked
+
+def send_push_notification(user_id, title, body, url='/chats'):
+    if not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY:
+        return False
+    user = User.query.get(user_id)
+    if not user or not user.subscription:
+        return False
+    try:
+        subscription = json.loads(user.subscription)
+        webpush(
+            subscription_info=subscription,
+            data=json.dumps({'title': title, 'body': body, 'url': url}),
+            vapid_private_key=VAPID_PRIVATE_KEY,
+            vapid_claims=VAPID_CLAIMS
+        )
+        return True
+    except WebPushException as e:
+        print(f'Ошибка отправки уведомления: {e}')
+        return False
+
 # ==================== ОСНОВНЫЕ МАРШРУТЫ ====================
 @app.route('/')
 def index():
+    if get_setting('maintenance_mode', 'false') == 'true':
+        return render_template('maintenance.html')
     if 'user_id' in session:
         update_user_online_status(session['user_id'], True)
         return redirect(url_for('chats'))
@@ -175,30 +241,50 @@ def index():
 def login_page():
     if 'user_id' in session:
         return redirect(url_for('chats'))
+    if get_setting('maintenance_mode', 'false') == 'true':
+        return render_template('maintenance.html')
     return render_template('login.html')
 
 @app.route('/register_page')
 def register_page():
     if 'user_id' in session:
         return redirect(url_for('chats'))
-    setting = SystemSetting.query.filter_by(key='registration_enabled').first()
-    if setting and setting.value == 'false':
+    if get_setting('maintenance_mode', 'false') == 'true':
+        return render_template('maintenance.html')
+    if get_setting('registration_enabled', 'true') == 'false':
         flash('Регистрация временно закрыта администратором', 'warning')
         return redirect(url_for('index'))
+    if get_setting('invite_only', 'false') == 'true':
+        invite_code = request.args.get('code', '')
+        if invite_code != get_setting('invite_code', 'NVDB2026'):
+            flash('Требуется код приглашения', 'warning')
+            return render_template('invite.html')
     return render_template('register.html')
 
 @app.route('/register', methods=['POST'])
 def register():
-    setting = SystemSetting.query.filter_by(key='registration_enabled').first()
-    if setting and setting.value == 'false':
+    if get_setting('registration_enabled', 'true') == 'false':
         flash('Регистрация временно закрыта', 'warning')
         return redirect(url_for('index'))
+    
+    if get_setting('invite_only', 'false') == 'true':
+        invite_code = request.form.get('invite_code', '')
+        if invite_code != get_setting('invite_code', 'NVDB2026'):
+            flash('Неверный код приглашения', 'danger')
+            return redirect(url_for('register_page'))
+    
     name = request.form['name']
     password = request.form['password']
+    
+    if is_user_blacklisted(name):
+        flash('Ваш аккаунт заблокирован', 'danger')
+        return redirect(url_for('index'))
+    
     existing = User.query.filter_by(name=name).first()
     if existing:
         flash('Пользователь с таким именем уже существует')
         return redirect(url_for('register_page'))
+    
     user = User(name=name)
     user.set_password(password)
     db.session.add(user)
@@ -210,6 +296,11 @@ def register():
 def login():
     name = request.form['name']
     password = request.form['password']
+    
+    if is_user_blacklisted(name):
+        flash('Ваш аккаунт заблокирован', 'danger')
+        return redirect(url_for('index'))
+    
     user = User.query.filter_by(name=name).first()
     if user and user.check_password(password):
         if user.is_banned:
@@ -350,9 +441,23 @@ def chat(chat_id):
 def send_message(chat_id):
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 403
+    
     content = request.form.get('content', '')
     file = request.files.get('file')
+    
+    # Проверка голосовых сообщений
+    if file and file.content_type and 'audio' in file.content_type:
+        if get_setting('enable_voice', 'true') == 'false':
+            return jsonify({'error': 'Голосовые сообщения отключены администратором'}), 403
+    
+    # Проверка фото/видео
+    if file and file.content_type:
+        if 'image' in file.content_type or 'video' in file.content_type:
+            if get_setting('enable_media', 'true') == 'false':
+                return jsonify({'error': 'Отправка фото и видео отключена администратором'}), 403
+    
     msg = Message(chat_id=chat_id, sender_id=session['user_id'])
+    
     if file and file.filename:
         file_url, file_type = upload_to_cloudinary(file, folder='nvdbchat/uploads')
         if file_url:
@@ -362,6 +467,11 @@ def send_message(chat_id):
             db.session.add(msg)
             db.session.commit()
             sender = User.query.get(msg.sender_id)
+            if msg.sender_id != session['user_id']:
+                participants = ChatParticipant.query.filter(ChatParticipant.chat_id == chat_id, ChatParticipant.user_id != msg.sender_id).first()
+                if participants:
+                    notification_text = content[:50] + ('...' if content and len(content) > 50 else '') if content else 'Файл'
+                    send_push_notification(participants.user_id, 'Новое сообщение', notification_text, f'/chat/{chat_id}')
             return jsonify({'id': msg.id, 'content': msg.content, 'file_url': msg.file_url, 'file_type': msg.file_type, 'sender_id': msg.sender_id, 'sender_name': sender.username or sender.name, 'timestamp': msg.timestamp.strftime('%H:%M')}), 200
     if content.strip():
         msg.content = content
@@ -369,6 +479,11 @@ def send_message(chat_id):
         db.session.add(msg)
         db.session.commit()
         sender = User.query.get(msg.sender_id)
+        if msg.sender_id != session['user_id']:
+            participants = ChatParticipant.query.filter(ChatParticipant.chat_id == chat_id, ChatParticipant.user_id != msg.sender_id).first()
+            if participants:
+                notification_text = content[:50] + ('...' if len(content) > 50 else '')
+                send_push_notification(participants.user_id, 'Новое сообщение', notification_text, f'/chat/{chat_id}')
         return jsonify({'id': msg.id, 'content': msg.content, 'file_type': 'text', 'sender_id': msg.sender_id, 'sender_name': sender.username or sender.name, 'timestamp': msg.timestamp.strftime('%H:%M')}), 200
     return jsonify({'error': 'Empty message'}), 400
 
@@ -446,6 +561,9 @@ def get_new_messages(chat_id):
 def create_group():
     if 'user_id' not in session:
         return redirect(url_for('index'))
+    if get_setting('enable_groups', 'true') == 'false':
+        flash('Создание групп отключено администратором', 'warning')
+        return redirect(url_for('chats'))
     if request.method == 'POST':
         group_name = request.form['group_name']
         members_str = request.form['members']
@@ -590,6 +708,21 @@ def stop_typing(chat_id):
         return jsonify({'error': 'Unauthorized'}), 401
     return jsonify({'status': 'ok'})
 
+# ==================== УВЕДОМЛЕНИЯ ====================
+@app.route('/vapid_public_key')
+def vapid_public_key():
+    return jsonify({'public_key': VAPID_PUBLIC_KEY})
+
+@app.route('/subscribe', methods=['POST'])
+def subscribe():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    subscription = request.get_json()
+    user = User.query.get(session['user_id'])
+    user.subscription = json.dumps(subscription)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
 # ==================== АДМИН-ПАНЕЛЬ ====================
 @app.route('/admin')
 @admin_required
@@ -692,40 +825,7 @@ def admin_media():
     media_messages = Message.query.filter(Message.file_url.isnot(None)).order_by(Message.timestamp.desc()).limit(200).all()
     return render_template('admin_media.html', media=media_messages)
 
-@app.route('/admin/settings')
-@admin_required
-def admin_settings():
-    registration_enabled = SystemSetting.query.filter_by(key='registration_enabled').first()
-    return render_template('admin_settings.html', registration_enabled=registration_enabled.value == 'true')
-
-@app.route('/admin/settings/update', methods=['POST'])
-@admin_required
-def admin_settings_update():
-    reg = request.form.get('registration_enabled') == 'on'
-    setting = SystemSetting.query.filter_by(key='registration_enabled').first()
-    if setting:
-        setting.value = 'true' if reg else 'false'
-        db.session.commit()
-    flash('Настройки сохранены')
-    return redirect(url_for('admin_settings'))
-
-# ==================== ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ ====================
-
-def get_setting(key, default='false'):
-    setting = SystemSetting.query.filter_by(key=key).first()
-    if setting:
-        return setting.value
-    return default
-
-def set_setting(key, value):
-    setting = SystemSetting.query.filter_by(key=key).first()
-    if setting:
-        setting.value = value
-    else:
-        setting = SystemSetting(key=key, value=value)
-        db.session.add(setting)
-    db.session.commit()
-
+# ==================== НАСТРОЙКИ АДМИНКИ ====================
 @app.route('/admin/settings')
 @admin_required
 def admin_settings():
@@ -774,21 +874,18 @@ def admin_clear_cache():
 @app.route('/admin/backup_db')
 @admin_required
 def admin_backup_db():
-    import io
-    import csv
-    
-    output = io.StringIO()
+    output = StringIO()
     writer = csv.writer(output)
-    writer.writerow(['id', 'name', 'username', 'avatar_url', 'created_at', 'is_banned'])
+    writer.writerow(['id', 'name', 'username', 'avatar_url', 'created_at', 'is_banned', 'is_online'])
     
     for user in User.query.all():
-        writer.writerow([user.id, user.name, user.username, user.avatar_url, user.created_at, user.is_banned])
+        writer.writerow([user.id, user.name, user.username, user.avatar_url, user.created_at, user.is_banned, user.is_online])
     
     response = Response(output.getvalue(), mimetype='text/csv')
     response.headers.set('Content-Disposition', 'attachment', filename='nvdbchat_backup.csv')
     return response
 
-# ==================== ВСПОМОГАТЕЛЬНЫЙ МАРШРУТ ====================
+# ==================== ВСПОМОГАТЕЛЬНЫЕ МАРШРУТЫ ====================
 @app.route('/fix_db_all')
 def fix_db_all():
     from sqlalchemy import text
@@ -798,6 +895,7 @@ def fix_db_all():
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_online BOOLEAN DEFAULT FALSE"))
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE"))
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_folders TEXT DEFAULT NULL"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription TEXT DEFAULT NULL"))
             conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to INTEGER DEFAULT NULL"))
             conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS pinned BOOLEAN DEFAULT FALSE"))
             conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMP DEFAULT NULL"))
