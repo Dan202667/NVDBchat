@@ -1,13 +1,168 @@
 {% extends "base.html" %}
 {% block content %}
-<div style="padding:20px">
-    <h2>Системные настройки</h2>
+<div style="padding: 20px;">
+    <h2>⚙️ Настройки сервера</h2>
+    
     <form method="POST" action="{{ url_for('admin_settings_update') }}">
-        <label>
-            <input type="checkbox" name="registration_enabled" {% if registration_enabled %}checked{% endif %}> Разрешена регистрация новых пользователей
-        </label><br><br>
-        <button type="submit" class="btn">Сохранить</button>
+        <!-- Основные настройки -->
+        <div style="background: #202c33; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+            <h3 style="color: #00a884; margin-bottom: 15px;">🔐 Основные</h3>
+            
+            <div class="setting-item">
+                <label>
+                    <input type="checkbox" name="registration_enabled" {% if settings.registration_enabled %}checked{% endif %}>
+                    Разрешена регистрация новых пользователей
+                </label>
+            </div>
+            
+            <div class="setting-item">
+                <label>
+                    <input type="checkbox" name="invite_only" {% if settings.invite_only %}checked{% endif %}>
+                    Только по приглашениям (нужен код)
+                </label>
+            </div>
+            
+            {% if settings.invite_only %}
+            <div class="setting-item">
+                <label>Код приглашения:</label>
+                <input type="text" name="invite_code" value="{{ settings.invite_code }}" style="width: 200px;">
+            </div>
+            {% endif %}
+            
+            <div class="setting-item">
+                <label>
+                    <input type="checkbox" name="maintenance_mode" {% if settings.maintenance_mode %}checked{% endif %}>
+                    Режим обслуживания (сайт недоступен для пользователей)
+                </label>
+            </div>
+        </div>
+        
+        <!-- Функции -->
+        <div style="background: #202c33; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+            <h3 style="color: #00a884; margin-bottom: 15px;">🎨 Включить/выключить функции</h3>
+            
+            <div class="setting-item">
+                <label>
+                    <input type="checkbox" name="enable_voice" {% if settings.enable_voice %}checked{% endif %}>
+                    Голосовые сообщения
+                </label>
+            </div>
+            
+            <div class="setting-item">
+                <label>
+                    <input type="checkbox" name="enable_media" {% if settings.enable_media %}checked{% endif %}>
+                    Отправка фото и видео
+                </label>
+            </div>
+            
+            <div class="setting-item">
+                <label>
+                    <input type="checkbox" name="enable_groups" {% if settings.enable_groups %}checked{% endif %}>
+                    Создание групп
+                </label>
+            </div>
+        </div>
+        
+        <!-- Ограничения -->
+        <div style="background: #202c33; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+            <h3 style="color: #00a884; margin-bottom: 15px;">📊 Ограничения</h3>
+            
+            <div class="setting-item">
+                <label>Максимум попыток входа:</label>
+                <select name="max_login_attempts">
+                    <option value="3" {% if settings.max_login_attempts == 3 %}selected{% endif %}>3 попытки</option>
+                    <option value="5" {% if settings.max_login_attempts == 5 %}selected{% endif %}>5 попыток</option>
+                    <option value="10" {% if settings.max_login_attempts == 10 %}selected{% endif %}>10 попыток</option>
+                    <option value="0" {% if settings.max_login_attempts == 0 %}selected{% endif %}>Без ограничений</option>
+                </select>
+            </div>
+            
+            <div class="setting-item">
+                <label>Максимальный размер файла (MB):</label>
+                <select name="max_file_size_mb">
+                    <option value="5" {% if settings.max_file_size_mb == 5 %}selected{% endif %}>5 MB</option>
+                    <option value="10" {% if settings.max_file_size_mb == 10 %}selected{% endif %}>10 MB</option>
+                    <option value="20" {% if settings.max_file_size_mb == 20 %}selected{% endif %}>20 MB</option>
+                    <option value="50" {% if settings.max_file_size_mb == 50 %}selected{% endif %}>50 MB</option>
+                </select>
+            </div>
+            
+            <div class="setting-item">
+                <label>Антиспам (сообщений в минуту):</label>
+                <select name="messages_per_minute">
+                    <option value="0" {% if settings.messages_per_minute == 0 %}selected{% endif %}>Без лимита</option>
+                    <option value="10" {% if settings.messages_per_minute == 10 %}selected{% endif %}>10 сообщений</option>
+                    <option value="20" {% if settings.messages_per_minute == 20 %}selected{% endif %}>20 сообщений</option>
+                    <option value="30" {% if settings.messages_per_minute == 30 %}selected{% endif %}>30 сообщений</option>
+                </select>
+            </div>
+        </div>
+        
+        <!-- Чёрный список -->
+        <div style="background: #202c33; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+            <h3 style="color: #00a884; margin-bottom: 15px;">🚫 Чёрный список пользователей</h3>
+            
+            <div class="setting-item">
+                <label>Заблокированные пользователи (username через запятую):</label>
+                <textarea name="blacklist" rows="3" style="width: 100%; background: #2a3942; border: 1px solid #3b4a54; color: #e9edef; border-radius: 8px;">{{ settings.blacklist }}</textarea>
+                <small>Пример: user1, user2, spammer</small>
+            </div>
+        </div>
+        
+        <!-- Управление данными -->
+        <div style="background: #202c33; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+            <h3 style="color: #00a884; margin-bottom: 15px;">🗑️ Управление данными</h3>
+            
+            <div class="setting-item">
+                <label>Автоудаление сообщений через (дней):</label>
+                <select name="auto_delete_days">
+                    <option value="0" {% if settings.auto_delete_days == 0 %}selected{% endif %}>Никогда</option>
+                    <option value="7" {% if settings.auto_delete_days == 7 %}selected{% endif %}>7 дней</option>
+                    <option value="30" {% if settings.auto_delete_days == 30 %}selected{% endif %}>30 дней</option>
+                    <option value="90" {% if settings.auto_delete_days == 90 %}selected{% endif %}>90 дней</option>
+                </select>
+            </div>
+            
+            <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button type="button" onclick="clearCache()" class="btn" style="background: #ff4444; width: auto;">🗑️ Очистить кеш</button>
+                <button type="button" onclick="backupDB()" class="btn" style="background: #00a884; width: auto;">💾 Скачать бэкап БД</button>
+            </div>
+        </div>
+        
+        <button type="submit" class="btn">💾 Сохранить настройки</button>
     </form>
-    <a href="{{ url_for('admin_dashboard') }}">← Назад</a>
 </div>
+
+<script>
+    function clearCache() {
+        if (confirm('Очистить кеш сервера?')) {
+            fetch('/admin/clear_cache', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => alert(data.message));
+        }
+    }
+    
+    function backupDB() {
+        window.location.href = '/admin/backup_db';
+    }
+</script>
+
+<style>
+.setting-item {
+    margin-bottom: 15px;
+    padding: 8px;
+    border-bottom: 1px solid #2a3942;
+}
+.setting-item label {
+    display: block;
+    margin-bottom: 5px;
+}
+.setting-item select, .setting-item input[type="text"], .setting-item textarea {
+    background: #2a3942;
+    border: 1px solid #3b4a54;
+    color: #e9edef;
+    padding: 8px;
+    border-radius: 8px;
+}
+</style>
 {% endblock %}
