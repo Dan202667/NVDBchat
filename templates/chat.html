@@ -43,19 +43,24 @@
                 {% endif %}
             </div>
         </div>
-        <div class="chat-header-actions">
-            {% if chat.type == 'group' %}
-                <div class="chat-header-action" onclick="openChatMenu()">⋮</div>
-            {% endif %}
-            <button class="delete-chat-btn" onclick="deleteChat()">🗑️</button>
-        </div>
+        {% if chat.type == 'group' %}
+        <button class="delete-chat-btn" onclick="openGroupMenu()">⋮</button>
+        {% else %}
+        <button class="delete-chat-btn" onclick="deleteChat()">🗑️</button>
+        {% endif %}
     </div>
     
     <div id="typingIndicator" class="typing-indicator" style="display: none; padding: 8px 16px; font-size: 13px; color: #8696a0; font-style: italic;"></div>
     
     <div class="messages-container" id="messages">
         {% for msg in messages %}
-        <div class="message-wrapper {% if msg.sender_id == session.user_id %}my-message{% else %}other-message{% endif %}" data-msg-id="{{ msg.id }}">
+        <div class="message-wrapper {% if msg.sender_id == session.user_id %}my-message{% else %}other-message{% endif %}" 
+             data-msg-id="{{ msg.id }}"
+             data-sender-id="{{ msg.sender_id }}"
+             data-sender-name="{{ msg.sender_name }}"
+             data-content="{{ msg.content|escape }}"
+             data-file-type="{{ msg.file_type }}"
+             data-file-url="{{ msg.file_url }}">
             <div class="message-bubble">
                 {% if msg.sender_id != session.user_id and chat.type == 'group' %}
                 <div class="message-sender">{{ msg.sender_name }}</div>
@@ -76,12 +81,6 @@
                 
                 <div class="message-footer">
                     <div class="message-time">{{ msg.timestamp.strftime('%H:%M') }}</div>
-                    <div class="message-actions">
-                        {% if msg.sender_id == session.user_id %}
-                            <button class="edit-msg-btn" onclick="editMessage({{ msg.id }})">✏️</button>
-                            <button class="delete-msg-btn" onclick="deleteMessage({{ msg.id }})">🗑️</button>
-                        {% endif %}
-                    </div>
                 </div>
                 
                 <div class="message-reactions" id="reactions-{{ msg.id }}">
@@ -119,7 +118,9 @@
     var messagesDiv = document.getElementById('messages');
     var typingIndicator = document.getElementById('typingIndicator');
     var typingTimeout;
+    var contextMenuMsgId = null;
     
+    // Прокрутка
     function scrollToBottom() {
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
@@ -137,7 +138,7 @@
         if (!isUserScrolling) messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
     
-    // ========== ИНДИКАТОР ПЕЧАТАЕТ ==========
+    // Индикатор печатает
     function showTyping(senderName) {
         typingIndicator.textContent = senderName + ' печатает...';
         typingIndicator.style.display = 'block';
@@ -149,7 +150,6 @@
     
     const messageInput = document.getElementById('messageInput');
     let lastTypingTime = 0;
-    
     messageInput.addEventListener('input', () => {
         const now = Date.now();
         if (now - lastTypingTime > 2000) {
@@ -158,133 +158,82 @@
         }
     });
     
-    // ========== МЕНЮ ГРУППЫ ==========
-    function openChatMenu() {
-        const menuHtml = `
-            <div id="groupMenu" class="group-menu" style="position: fixed; bottom: 0; left: 0; right: 0; background: #202c33; border-radius: 20px 20px 0 0; padding: 20px; z-index: 1000; animation: slideUp 0.2s ease;">
-                <div style="text-align: center; margin-bottom: 20px;">
-                    <div style="width: 50px; height: 4px; background: #3b4a54; border-radius: 2px; margin: 0 auto;"></div>
-                </div>
-                <div class="menu-item" onclick="changeGroupName()">✏️ Изменить название</div>
-                <div class="menu-item" onclick="changeGroupPhoto()">🖼️ Сменить фото группы</div>
-                <div class="menu-item" onclick="viewGroupMembers()">👥 Участники группы</div>
-                <div class="menu-item" onclick="addGroupMember()">➕ Добавить участника</div>
-                <div class="menu-item" style="color: #ff4444;" onclick="leaveGroup()">🚪 Выйти из группы</div>
+    // ========== КОНТЕКСТНОЕ МЕНЮ ПО ДОЛГОМУ НАЖАТИЮ ==========
+    function showContextMenu(msgId, senderId, senderName, content, fileType, fileUrl) {
+        const isMine = (senderId == currentUserId);
+        let menuHtml = `
+            <div id="contextMenu" class="context-menu">
+                <div class="menu-item" onclick="replyToMessage(${msgId}, '${senderName}', '${content.replace(/'/g, "\\'")}')">↩️ Ответить</div>
+        `;
+        if (isMine) {
+            if (!fileType || fileType === 'text') {
+                menuHtml += `<div class="menu-item" onclick="editMessage(${msgId})">✏️ Редактировать</div>`;
+            }
+            menuHtml += `<div class="menu-item" onclick="deleteMessage(${msgId})">🗑️ Удалить</div>`;
+        }
+        menuHtml += `
                 <div style="height: 10px;"></div>
-                <div class="menu-item" onclick="closeGroupMenu()">Отмена</div>
+                <div class="menu-item" onclick="closeContextMenu()">Отмена</div>
             </div>
-            <div id="menuOverlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 999;" onclick="closeGroupMenu()"></div>
+            <div id="menuOverlay" class="menu-overlay" onclick="closeContextMenu()"></div>
         `;
         document.body.insertAdjacentHTML('beforeend', menuHtml);
         document.body.style.overflow = 'hidden';
     }
     
-    function closeGroupMenu() {
-        document.getElementById('groupMenu')?.remove();
+    function closeContextMenu() {
+        document.getElementById('contextMenu')?.remove();
         document.getElementById('menuOverlay')?.remove();
         document.body.style.overflow = '';
+        contextMenuMsgId = null;
     }
     
-    function changeGroupName() {
-        const newName = prompt('Введите новое название группы:');
-        if (newName && newName.trim()) {
-            fetch('/group/change_name/' + chatId, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: newName })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'ok') {
-                    location.reload();
-                } else {
-                    alert('Ошибка: ' + (data.error || 'Не удалось изменить название'));
-                }
-            });
+    // Долгое нажатие на сообщение
+    let pressTimer;
+    function startPressTimer(msgId, senderId, senderName, content, fileType, fileUrl) {
+        pressTimer = setTimeout(() => {
+            showContextMenu(msgId, senderId, senderName, content, fileType, fileUrl);
+        }, 500);
+    }
+    function cancelPressTimer() {
+        if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
         }
-        closeGroupMenu();
     }
     
-    function changeGroupPhoto() {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.onchange = () => {
-            const file = input.files[0];
-            if (file) {
-                const formData = new FormData();
-                formData.append('avatar', file);
-                fetch('/group/upload_avatar/' + chatId, {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'ok') {
-                        location.reload();
-                    }
-                });
-            }
-        };
-        input.click();
-        closeGroupMenu();
-    }
+    // Назначаем обработчики для существующих сообщений
+    document.querySelectorAll('.message-wrapper').forEach(msgDiv => {
+        const msgId = msgDiv.getAttribute('data-msg-id');
+        const senderId = msgDiv.getAttribute('data-sender-id');
+        const senderName = msgDiv.getAttribute('data-sender-name');
+        const content = msgDiv.getAttribute('data-content');
+        const fileType = msgDiv.getAttribute('data-file-type');
+        const fileUrl = msgDiv.getAttribute('data-file-url');
+        
+        msgDiv.addEventListener('touchstart', (e) => {
+            startPressTimer(msgId, senderId, senderName, content, fileType, fileUrl);
+        });
+        msgDiv.addEventListener('touchend', cancelPressTimer);
+        msgDiv.addEventListener('touchmove', cancelPressTimer);
+        msgDiv.addEventListener('mousedown', (e) => {
+            startPressTimer(msgId, senderId, senderName, content, fileType, fileUrl);
+        });
+        msgDiv.addEventListener('mouseup', cancelPressTimer);
+        msgDiv.addEventListener('mouseleave', cancelPressTimer);
+    });
     
-    function viewGroupMembers() {
-        fetch('/group/info/' + chatId)
-            .then(response => response.json())
-            .then(data => {
-                let membersList = '';
-                data.members.forEach(m => {
-                    membersList += `${m.name} (@${m.username})\n`;
-                });
-                alert('Участники группы:\n' + membersList);
-            });
-        closeGroupMenu();
-    }
+    // ========== ДЕЙСТВИЯ НАД СООБЩЕНИЯМИ ==========
+    window.replyToMessage = function(msgId, senderName, content) {
+        setReplyTo(msgId, senderName, content);
+        closeContextMenu();
+    };
     
-    function addGroupMember() {
-        const username = prompt('Введите @username пользователя для добавления:');
-        if (username) {
-            fetch('/group/add_member/' + chatId, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: username })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'ok') {
-                    alert('Пользователь добавлен');
-                    location.reload();
-                } else {
-                    alert('Ошибка: ' + (data.error || 'Пользователь не найден'));
-                }
-            });
-        }
-        closeGroupMenu();
-    }
-    
-    function leaveGroup() {
-        if (confirm('Вы уверены, что хотите выйти из группы?')) {
-            fetch('/group/leave/' + chatId, { method: 'POST' })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'ok') {
-                    window.location.href = '/chats';
-                } else {
-                    alert('Ошибка: ' + (data.error || 'Не удалось выйти из группы'));
-                }
-            });
-        }
-        closeGroupMenu();
-    }
-    
-    // ========== РЕДАКТИРОВАНИЕ ==========
     window.editMessage = function(msgId) {
-        var msgDiv = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .message-text`);
+        const msgDiv = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .message-text`);
         if (!msgDiv) return;
-        var oldText = msgDiv.innerText;
-        var newText = prompt("Редактировать сообщение:", oldText);
+        const oldText = msgDiv.innerText;
+        const newText = prompt("Редактировать сообщение:", oldText);
         if (newText && newText.trim() !== oldText) {
             fetch('/edit_message/' + msgId, {
                 method: 'POST',
@@ -295,19 +244,19 @@
             .then(data => {
                 if (data.status === 'ok') {
                     msgDiv.innerText = data.content;
-                    var bubble = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .message-content`);
+                    let bubble = msgDiv.closest('.message-bubble');
                     if (!bubble.querySelector('.edited-badge')) {
-                        var badge = document.createElement('span');
+                        let badge = document.createElement('span');
                         badge.className = 'edited-badge';
                         badge.innerText = '(ред.)';
-                        bubble.appendChild(badge);
+                        bubble.querySelector('.message-content').appendChild(badge);
                     }
                 }
             });
         }
+        closeContextMenu();
     };
     
-    // ========== УДАЛЕНИЕ СООБЩЕНИЯ ==========
     window.deleteMessage = function(msgId) {
         if (confirm("Удалить это сообщение?")) {
             fetch('/delete_message/' + msgId, {method: 'POST'})
@@ -318,75 +267,46 @@
                 }
             });
         }
+        closeContextMenu();
     };
     
-    // ========== УДАЛЕНИЕ ЧАТА ==========
-    window.deleteChat = function() {
-        if (confirm("Удалить весь чат? Восстановить будет невозможно!")) {
-            fetch('/delete_chat/' + chatId, {method: 'POST'})
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'ok') window.location.href = '/chats';
-            });
+    // ========== ОТВЕТ НА СООБЩЕНИЕ ==========
+    let replyToId = null;
+    function setReplyTo(msgId, senderName, content) {
+        replyToId = msgId;
+        const replyBar = document.getElementById('replyBar');
+        if (!replyBar) {
+            const bar = document.createElement('div');
+            bar.id = 'replyBar';
+            bar.className = 'reply-bar';
+            bar.innerHTML = `
+                <div id="replyText">Ответ ${senderName}: ${content.substring(0, 50)}</div>
+                <div class="reply-bar-close" onclick="clearReply()">✕</div>
+            `;
+            document.querySelector('.chat-header').after(bar);
+        } else {
+            document.getElementById('replyText').innerHTML = `Ответ ${senderName}: ${content.substring(0, 50)}`;
+            replyBar.style.display = 'flex';
         }
-    };
-    
-    // ========== РЕАКЦИИ ==========
-    window.toggleReaction = function(msgId, emoji) {
-        fetch('/add_reaction/' + msgId, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({emoji: emoji})
-        })
-        .then(response => response.json())
-        .then(data => updateReactionsDisplay(msgId, data.reactions));
-    };
-    
-    window.showReactionPicker = function(msgId) {
-        var emojis = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉', '💯'];
-        var picker = document.createElement('div');
-        picker.className = 'reaction-picker';
-        emojis.forEach(emoji => {
-            var btn = document.createElement('button');
-            btn.innerText = emoji;
-            btn.onclick = () => { toggleReaction(msgId, emoji); picker.remove(); };
-            picker.appendChild(btn);
-        });
-        var btn = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .add-reaction-btn`);
-        if (btn) {
-            btn.parentElement.appendChild(picker);
-            setTimeout(() => picker.remove(), 3000);
-        }
-    };
-    
-    function updateReactionsDisplay(msgId, reactions) {
-        var container = document.getElementById('reactions-' + msgId);
-        if (!container) return;
-        container.innerHTML = '';
-        reactions.forEach(r => {
-            var span = document.createElement('span');
-            span.className = 'reaction';
-            span.innerText = r.emoji;
-            span.onclick = () => toggleReaction(msgId, r.emoji);
-            container.appendChild(span);
-        });
-        var addBtn = document.createElement('button');
-        addBtn.className = 'add-reaction-btn';
-        addBtn.innerText = '➕';
-        addBtn.onclick = () => showReactionPicker(msgId);
-        container.appendChild(addBtn);
     }
     
-    // ========== ОТПРАВКА СООБЩЕНИЙ ==========
-    const sendBtn = document.getElementById('sendBtn');
+    window.clearReply = function() {
+        replyToId = null;
+        const bar = document.getElementById('replyBar');
+        if (bar) bar.style.display = 'none';
+    };
     
+    // Отправка сообщения с ответом
+    const sendBtn = document.getElementById('sendBtn');
     sendBtn.addEventListener('click', () => {
         const content = messageInput.value.trim();
         if (content) {
+            let formData = new FormData();
+            formData.append('content', content);
+            if (replyToId) formData.append('reply_to', replyToId);
             fetch('/send_message/' + chatId, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'content=' + encodeURIComponent(content)
+                body: formData
             })
             .then(response => response.json())
             .then(data => {
@@ -394,12 +314,13 @@
                 appendMessage(data);
                 lastMessageId = data.id;
                 messageInput.value = '';
+                clearReply();
                 scrollToBottomIfNeeded();
             });
         }
     });
     
-    // ========== ПРИКРЕПЛЕНИЕ ФАЙЛОВ ==========
+    // ========== ОСТАЛЬНЫЕ ФУНКЦИИ ==========
     const attachBtn = document.getElementById('attachBtn');
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
@@ -413,6 +334,7 @@
         if (file) {
             const formData = new FormData();
             formData.append('file', file);
+            if (replyToId) formData.append('reply_to', replyToId);
             fetch('/send_message/' + chatId, { method: 'POST', body: formData })
             .then(response => response.json())
             .then(data => {
@@ -421,11 +343,12 @@
                 lastMessageId = data.id;
                 scrollToBottomIfNeeded();
                 fileInput.value = '';
+                clearReply();
             });
         }
     });
     
-    // ========== ЗАПИСЬ ГОЛОСА ==========
+    // Запись голоса
     let mediaRecorder, audioChunks = [], recordingTimer, seconds = 0;
     const recordBtn = document.getElementById('recordBtn');
     const recordingIndicator = document.getElementById('recordingIndicator');
@@ -442,6 +365,7 @@
                 const file = new File([audioBlob], 'voice.webm', { type: 'audio/webm' });
                 const formData = new FormData();
                 formData.append('file', file);
+                if (replyToId) formData.append('reply_to', replyToId);
                 fetch('/send_message/' + chatId, { method: 'POST', body: formData })
                 .then(response => response.json())
                 .then(data => { if (!data.error) { appendMessage(data); scrollToBottomIfNeeded(); } });
@@ -451,6 +375,7 @@
                 seconds = 0;
                 recordTimerSpan.innerText = '0:00';
                 recordBtn.style.background = '';
+                clearReply();
             };
             mediaRecorder.start();
             recordingIndicator.style.display = 'flex';
@@ -473,51 +398,114 @@
         else startRecording();
     });
     
+    // Реакции
+    window.toggleReaction = function(msgId, emoji) {
+        fetch('/add_reaction/' + msgId, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({emoji: emoji})
+        })
+        .then(response => response.json())
+        .then(data => updateReactionsDisplay(msgId, data.reactions));
+    };
+    
+    window.showReactionPicker = function(msgId) {
+        const emojis = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉', '💯'];
+        const picker = document.createElement('div');
+        picker.className = 'reaction-picker';
+        emojis.forEach(emoji => {
+            const btn = document.createElement('button');
+            btn.innerText = emoji;
+            btn.onclick = () => { toggleReaction(msgId, emoji); picker.remove(); };
+            picker.appendChild(btn);
+        });
+        const btn = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .add-reaction-btn`);
+        if (btn) {
+            btn.parentElement.appendChild(picker);
+            setTimeout(() => picker.remove(), 3000);
+        }
+    };
+    
+    function updateReactionsDisplay(msgId, reactions) {
+        const container = document.getElementById('reactions-' + msgId);
+        if (!container) return;
+        container.innerHTML = '';
+        reactions.forEach(r => {
+            const span = document.createElement('span');
+            span.className = 'reaction';
+            span.innerText = r.emoji;
+            span.onclick = () => toggleReaction(msgId, r.emoji);
+            container.appendChild(span);
+        });
+        const addBtn = document.createElement('button');
+        addBtn.className = 'add-reaction-btn';
+        addBtn.innerText = '➕';
+        addBtn.onclick = () => showReactionPicker(msgId);
+        container.appendChild(addBtn);
+    }
+    
+    // Добавление новых сообщений в DOM
     function appendMessage(msg) {
-        var msgDiv = document.createElement('div');
+        const msgDiv = document.createElement('div');
         msgDiv.className = 'message-wrapper ' + (msg.sender_id == currentUserId ? 'my-message' : 'other-message');
         msgDiv.setAttribute('data-msg-id', msg.id);
-        var bubble = document.createElement('div');
+        msgDiv.setAttribute('data-sender-id', msg.sender_id);
+        msgDiv.setAttribute('data-sender-name', msg.sender_name);
+        msgDiv.setAttribute('data-content', msg.content || '');
+        msgDiv.setAttribute('data-file-type', msg.file_type || '');
+        msgDiv.setAttribute('data-file-url', msg.file_url || '');
+        
+        // Обработчики долгого нажатия
+        msgDiv.addEventListener('touchstart', (e) => startPressTimer(msg.id, msg.sender_id, msg.sender_name, msg.content, msg.file_type, msg.file_url));
+        msgDiv.addEventListener('touchend', cancelPressTimer);
+        msgDiv.addEventListener('touchmove', cancelPressTimer);
+        msgDiv.addEventListener('mousedown', (e) => startPressTimer(msg.id, msg.sender_id, msg.sender_name, msg.content, msg.file_type, msg.file_url));
+        msgDiv.addEventListener('mouseup', cancelPressTimer);
+        msgDiv.addEventListener('mouseleave', cancelPressTimer);
+        
+        const bubble = document.createElement('div');
         bubble.className = 'message-bubble';
         
         if (msg.sender_id != currentUserId && {{ 'true' if chat.type == 'group' else 'false' }}) {
-            var senderDiv = document.createElement('div');
+            const senderDiv = document.createElement('div');
             senderDiv.className = 'message-sender';
             senderDiv.textContent = msg.sender_name;
             bubble.appendChild(senderDiv);
         }
         
-        var contentDiv = document.createElement('div');
+        const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
         if (msg.file_type === 'image') {
-            var img = document.createElement('img');
+            const img = document.createElement('img');
             img.src = msg.file_url;
             img.style.maxWidth = '200px';
+            img.style.borderRadius = '8px';
+            img.style.cursor = 'pointer';
             img.onclick = () => window.open(img.src);
             contentDiv.appendChild(img);
         } else if (msg.file_type === 'video') {
-            var video = document.createElement('video');
+            const video = document.createElement('video');
             video.controls = true;
             video.style.maxWidth = '200px';
-            var source = document.createElement('source');
+            const source = document.createElement('source');
             source.src = msg.file_url;
             video.appendChild(source);
             contentDiv.appendChild(video);
         } else if (msg.file_type === 'audio') {
-            var audio = document.createElement('audio');
+            const audio = document.createElement('audio');
             audio.controls = true;
             audio.style.maxWidth = '200px';
-            var source = document.createElement('source');
+            const source = document.createElement('source');
             source.src = msg.file_url;
             audio.appendChild(source);
             contentDiv.appendChild(audio);
         } else {
-            var textDiv = document.createElement('div');
+            const textDiv = document.createElement('div');
             textDiv.className = 'message-text';
             textDiv.textContent = msg.content;
             contentDiv.appendChild(textDiv);
             if (msg.is_edited) {
-                var badge = document.createElement('span');
+                const badge = document.createElement('span');
                 badge.className = 'edited-badge';
                 badge.innerText = '(ред.)';
                 contentDiv.appendChild(badge);
@@ -525,43 +513,27 @@
         }
         bubble.appendChild(contentDiv);
         
-        var footerDiv = document.createElement('div');
+        const footerDiv = document.createElement('div');
         footerDiv.className = 'message-footer';
-        var timeDiv = document.createElement('div');
+        const timeDiv = document.createElement('div');
         timeDiv.className = 'message-time';
         timeDiv.textContent = msg.timestamp;
         footerDiv.appendChild(timeDiv);
-        
-        if (msg.sender_id == currentUserId) {
-            var actionsDiv = document.createElement('div');
-            actionsDiv.className = 'message-actions';
-            var editBtn = document.createElement('button');
-            editBtn.className = 'edit-msg-btn';
-            editBtn.innerText = '✏️';
-            editBtn.onclick = () => editMessage(msg.id);
-            var delBtn = document.createElement('button');
-            delBtn.className = 'delete-msg-btn';
-            delBtn.innerText = '🗑️';
-            delBtn.onclick = () => deleteMessage(msg.id);
-            actionsDiv.appendChild(editBtn);
-            actionsDiv.appendChild(delBtn);
-            footerDiv.appendChild(actionsDiv);
-        }
         bubble.appendChild(footerDiv);
         
-        var reactionsDiv = document.createElement('div');
+        const reactionsDiv = document.createElement('div');
         reactionsDiv.className = 'message-reactions';
         reactionsDiv.id = 'reactions-' + msg.id;
         if (msg.reactions) {
             msg.reactions.forEach(r => {
-                var span = document.createElement('span');
+                const span = document.createElement('span');
                 span.className = 'reaction';
                 span.innerText = r.emoji;
                 span.onclick = () => toggleReaction(msg.id, r.emoji);
                 reactionsDiv.appendChild(span);
             });
         }
-        var addBtn = document.createElement('button');
+        const addBtn = document.createElement('button');
         addBtn.className = 'add-reaction-btn';
         addBtn.innerText = '➕';
         addBtn.onclick = () => showReactionPicker(msg.id);
@@ -573,6 +545,7 @@
         scrollToBottomIfNeeded();
     }
     
+    // Опрос новых сообщений
     function pollNewMessages() {
         fetch('/get_new_messages/' + chatId + '?last_id=' + lastMessageId)
         .then(response => response.json())
@@ -585,24 +558,21 @@
         });
     }
     setInterval(pollNewMessages, 3000);
+    
+    // Меню группы (если нужно)
+    function openGroupMenu() {
+        // Здесь можно добавить меню группы (изменение названия, добавление участников и т.д.)
+        alert('Меню группы (будет реализовано)');
+    }
+    
+    function deleteChat() {
+        if (confirm("Удалить весь чат? Восстановить будет невозможно!")) {
+            fetch('/delete_chat/' + chatId, {method: 'POST'})
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') window.location.href = '/chats';
+            });
+        }
+    }
 </script>
-
-<style>
-/* Стили для меню группы */
-.group-menu .menu-item {
-    padding: 15px;
-    text-align: center;
-    font-size: 17px;
-    cursor: pointer;
-    border-radius: 12px;
-    transition: background 0.2s;
-}
-.group-menu .menu-item:hover {
-    background: #2a3942;
-}
-@keyframes slideUp {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
-}
-</style>
 {% endblock %}
