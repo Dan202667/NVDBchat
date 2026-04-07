@@ -74,20 +74,13 @@
                     {% elif msg.file_type == 'audio' %}
                         <audio controls style="max-width: 200px; border-radius: 8px;"><source src="{{ msg.file_url }}"></audio>
                     {% else %}
-                        <div class="message-text">{{ msg.content }}</div>
+                        <div class="message-text" style="user-select: none; -webkit-touch-callout: none;">{{ msg.content }}</div>
                         {% if msg.is_edited %}<span class="edited-badge">(ред.)</span>{% endif %}
                     {% endif %}
                 </div>
                 
                 <div class="message-footer">
                     <div class="message-time">{{ msg.timestamp.strftime('%H:%M') }}</div>
-                </div>
-                
-                <div class="message-reactions" id="reactions-{{ msg.id }}">
-                    {% for r in msg.reactions_list %}
-                        <span class="reaction" onclick="toggleReaction({{ msg.id }}, '{{ r.emoji }}')">{{ r.emoji }}</span>
-                    {% endfor %}
-                    <button class="add-reaction-btn" onclick="showReactionPicker({{ msg.id }})">➕</button>
                 </div>
             </div>
         </div>
@@ -119,6 +112,12 @@
     var typingIndicator = document.getElementById('typingIndicator');
     var typingTimeout;
     var contextMenuMsgId = null;
+    var isSending = false;
+    
+    // Запрещаем выделение текста на всей странице
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
+    document.body.style.webkitTouchCallout = 'none';
     
     // Прокрутка
     function scrollToBottom() {
@@ -172,6 +171,7 @@
             menuHtml += `<div class="menu-item" onclick="deleteMessage(${msgId})">🗑️ Удалить</div>`;
         }
         menuHtml += `
+                <div class="menu-item" onclick="showReactionPickerForMessage(${msgId})">😊 Реакция</div>
                 <div style="height: 10px;"></div>
                 <div class="menu-item" onclick="closeContextMenu()">Отмена</div>
             </div>
@@ -212,6 +212,7 @@
         const fileUrl = msgDiv.getAttribute('data-file-url');
         
         msgDiv.addEventListener('touchstart', (e) => {
+            e.preventDefault();
             startPressTimer(msgId, senderId, senderName, content, fileType, fileUrl);
         });
         msgDiv.addEventListener('touchend', cancelPressTimer);
@@ -222,6 +223,51 @@
         msgDiv.addEventListener('mouseup', cancelPressTimer);
         msgDiv.addEventListener('mouseleave', cancelPressTimer);
     });
+    
+    // ========== РЕАКЦИИ (через контекстное меню) ==========
+    function showReactionPickerForMessage(msgId) {
+        closeContextMenu();
+        const emojis = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉', '💯'];
+        const picker = document.createElement('div');
+        picker.className = 'reaction-picker';
+        emojis.forEach(emoji => {
+            const btn = document.createElement('button');
+            btn.innerText = emoji;
+            btn.onclick = () => {
+                toggleReaction(msgId, emoji);
+                picker.remove();
+            };
+            picker.appendChild(btn);
+        });
+        const msgDiv = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"]`);
+        if (msgDiv) {
+            msgDiv.appendChild(picker);
+            setTimeout(() => picker.remove(), 3000);
+        }
+    }
+    
+    window.toggleReaction = function(msgId, emoji) {
+        fetch('/add_reaction/' + msgId, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({emoji: emoji})
+        })
+        .then(response => response.json())
+        .then(data => updateReactionsDisplay(msgId, data.reactions));
+    };
+    
+    function updateReactionsDisplay(msgId, reactions) {
+        const container = document.getElementById('reactions-' + msgId);
+        if (!container) return;
+        container.innerHTML = '';
+        reactions.forEach(r => {
+            const span = document.createElement('span');
+            span.className = 'reaction';
+            span.innerText = r.emoji;
+            span.onclick = () => toggleReaction(msgId, r.emoji);
+            container.appendChild(span);
+        });
+    }
     
     // ========== ДЕЙСТВИЯ НАД СООБЩЕНИЯМИ ==========
     window.replyToMessage = function(msgId, senderName, content) {
@@ -296,11 +342,13 @@
         if (bar) bar.style.display = 'none';
     };
     
-    // Отправка сообщения с ответом
+    // Отправка сообщения с защитой от дублирования
     const sendBtn = document.getElementById('sendBtn');
     sendBtn.addEventListener('click', () => {
+        if (isSending) return;
         const content = messageInput.value.trim();
         if (content) {
+            isSending = true;
             let formData = new FormData();
             formData.append('content', content);
             if (replyToId) formData.append('reply_to', replyToId);
@@ -310,13 +358,15 @@
             })
             .then(response => response.json())
             .then(data => {
+                isSending = false;
                 if (data.error) { alert(data.error); return; }
                 appendMessage(data);
                 lastMessageId = data.id;
                 messageInput.value = '';
                 clearReply();
                 scrollToBottomIfNeeded();
-            });
+            })
+            .catch(() => { isSending = false; });
         }
     });
     
@@ -332,19 +382,23 @@
     fileInput.addEventListener('change', () => {
         const file = fileInput.files[0];
         if (file) {
+            if (isSending) return;
+            isSending = true;
             const formData = new FormData();
             formData.append('file', file);
             if (replyToId) formData.append('reply_to', replyToId);
             fetch('/send_message/' + chatId, { method: 'POST', body: formData })
             .then(response => response.json())
             .then(data => {
+                isSending = false;
                 if (data.error) { alert(data.error); return; }
                 appendMessage(data);
                 lastMessageId = data.id;
                 scrollToBottomIfNeeded();
                 fileInput.value = '';
                 clearReply();
-            });
+            })
+            .catch(() => { isSending = false; });
         }
     });
     
@@ -355,6 +409,7 @@
     const recordTimerSpan = document.getElementById('recordTimer');
     
     async function startRecording() {
+        if (isSending) return;
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             mediaRecorder = new MediaRecorder(stream);
@@ -366,9 +421,16 @@
                 const formData = new FormData();
                 formData.append('file', file);
                 if (replyToId) formData.append('reply_to', replyToId);
+                isSending = true;
                 fetch('/send_message/' + chatId, { method: 'POST', body: formData })
                 .then(response => response.json())
-                .then(data => { if (!data.error) { appendMessage(data); scrollToBottomIfNeeded(); } });
+                .then(data => {
+                    isSending = false;
+                    if (!data.error) {
+                        appendMessage(data);
+                        scrollToBottomIfNeeded();
+                    }
+                });
                 stream.getTracks().forEach(track => track.stop());
                 recordingIndicator.style.display = 'none';
                 clearInterval(recordingTimer);
@@ -398,52 +460,6 @@
         else startRecording();
     });
     
-    // Реакции
-    window.toggleReaction = function(msgId, emoji) {
-        fetch('/add_reaction/' + msgId, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({emoji: emoji})
-        })
-        .then(response => response.json())
-        .then(data => updateReactionsDisplay(msgId, data.reactions));
-    };
-    
-    window.showReactionPicker = function(msgId) {
-        const emojis = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉', '💯'];
-        const picker = document.createElement('div');
-        picker.className = 'reaction-picker';
-        emojis.forEach(emoji => {
-            const btn = document.createElement('button');
-            btn.innerText = emoji;
-            btn.onclick = () => { toggleReaction(msgId, emoji); picker.remove(); };
-            picker.appendChild(btn);
-        });
-        const btn = document.querySelector(`.message-wrapper[data-msg-id="${msgId}"] .add-reaction-btn`);
-        if (btn) {
-            btn.parentElement.appendChild(picker);
-            setTimeout(() => picker.remove(), 3000);
-        }
-    };
-    
-    function updateReactionsDisplay(msgId, reactions) {
-        const container = document.getElementById('reactions-' + msgId);
-        if (!container) return;
-        container.innerHTML = '';
-        reactions.forEach(r => {
-            const span = document.createElement('span');
-            span.className = 'reaction';
-            span.innerText = r.emoji;
-            span.onclick = () => toggleReaction(msgId, r.emoji);
-            container.appendChild(span);
-        });
-        const addBtn = document.createElement('button');
-        addBtn.className = 'add-reaction-btn';
-        addBtn.innerText = '➕';
-        addBtn.onclick = () => showReactionPicker(msgId);
-        container.appendChild(addBtn);
-    }
-    
     // Добавление новых сообщений в DOM
     function appendMessage(msg) {
         const msgDiv = document.createElement('div');
@@ -456,10 +472,15 @@
         msgDiv.setAttribute('data-file-url', msg.file_url || '');
         
         // Обработчики долгого нажатия
-        msgDiv.addEventListener('touchstart', (e) => startPressTimer(msg.id, msg.sender_id, msg.sender_name, msg.content, msg.file_type, msg.file_url));
+        msgDiv.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startPressTimer(msg.id, msg.sender_id, msg.sender_name, msg.content, msg.file_type, msg.file_url);
+        });
         msgDiv.addEventListener('touchend', cancelPressTimer);
         msgDiv.addEventListener('touchmove', cancelPressTimer);
-        msgDiv.addEventListener('mousedown', (e) => startPressTimer(msg.id, msg.sender_id, msg.sender_name, msg.content, msg.file_type, msg.file_url));
+        msgDiv.addEventListener('mousedown', (e) => {
+            startPressTimer(msg.id, msg.sender_id, msg.sender_name, msg.content, msg.file_type, msg.file_url);
+        });
         msgDiv.addEventListener('mouseup', cancelPressTimer);
         msgDiv.addEventListener('mouseleave', cancelPressTimer);
         
@@ -502,6 +523,8 @@
         } else {
             const textDiv = document.createElement('div');
             textDiv.className = 'message-text';
+            textDiv.style.userSelect = 'none';
+            textDiv.style.webkitTouchCallout = 'none';
             textDiv.textContent = msg.content;
             contentDiv.appendChild(textDiv);
             if (msg.is_edited) {
@@ -524,20 +547,6 @@
         const reactionsDiv = document.createElement('div');
         reactionsDiv.className = 'message-reactions';
         reactionsDiv.id = 'reactions-' + msg.id;
-        if (msg.reactions) {
-            msg.reactions.forEach(r => {
-                const span = document.createElement('span');
-                span.className = 'reaction';
-                span.innerText = r.emoji;
-                span.onclick = () => toggleReaction(msg.id, r.emoji);
-                reactionsDiv.appendChild(span);
-            });
-        }
-        const addBtn = document.createElement('button');
-        addBtn.className = 'add-reaction-btn';
-        addBtn.innerText = '➕';
-        addBtn.onclick = () => showReactionPicker(msg.id);
-        reactionsDiv.appendChild(addBtn);
         bubble.appendChild(reactionsDiv);
         
         msgDiv.appendChild(bubble);
@@ -561,7 +570,6 @@
     
     // Меню группы (если нужно)
     function openGroupMenu() {
-        // Здесь можно добавить меню группы (изменение названия, добавление участников и т.д.)
         alert('Меню группы (будет реализовано)');
     }
     
