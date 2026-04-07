@@ -27,7 +27,7 @@ cloudinary.config(
     api_secret=os.environ.get('CLOUDINARY_API_SECRET', 'xf42h1mQQKprlwl0dujXHUpX7Ow')
 )
 
-# VAPID ключи для уведомлений (сгенерируй свои)
+# VAPID ключи для уведомлений (замени на свои)
 VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
 VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
 VAPID_CLAIMS = {"sub": "mailto:nvdbchat@example.com"}
@@ -46,7 +46,7 @@ class User(db.Model):
     is_online = db.Column(db.Boolean, default=False)
     is_banned = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    subscription = db.Column(db.Text, nullable=True)
+    subscription = db.Column(db.Text, nullable=True)  # Для Web Push уведомлений
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -445,12 +445,10 @@ def send_message(chat_id):
     content = request.form.get('content', '')
     file = request.files.get('file')
     
-    # Проверка голосовых сообщений
     if file and file.content_type and 'audio' in file.content_type:
         if get_setting('enable_voice', 'true') == 'false':
             return jsonify({'error': 'Голосовые сообщения отключены администратором'}), 403
     
-    # Проверка фото/видео
     if file and file.content_type:
         if 'image' in file.content_type or 'video' in file.content_type:
             if get_setting('enable_media', 'true') == 'false':
@@ -825,7 +823,6 @@ def admin_media():
     media_messages = Message.query.filter(Message.file_url.isnot(None)).order_by(Message.timestamp.desc()).limit(200).all()
     return render_template('admin_media.html', media=media_messages)
 
-# ==================== НАСТРОЙКИ АДМИНКИ ====================
 @app.route('/admin/settings')
 @admin_required
 def admin_settings():
@@ -867,7 +864,6 @@ def admin_settings_update():
 @app.route('/admin/clear_cache', methods=['POST'])
 @admin_required
 def admin_clear_cache():
-    # Здесь можно добавить очистку временных файлов
     flash('Кеш очищен')
     return jsonify({'message': 'Кеш очищен'})
 
@@ -906,6 +902,17 @@ def fix_db_all():
             conn.execute(text("ALTER TABLE chats ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(300) DEFAULT NULL"))
             conn.commit()
         return "✅ База данных обновлена. Все недостающие колонки добавлены."
+    except Exception as e:
+        return f"❌ Ошибка: {e}"
+
+@app.route('/fix_subscription')
+def fix_subscription():
+    from sqlalchemy import text
+    try:
+        with db.engine.connect() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription TEXT DEFAULT NULL"))
+            conn.commit()
+        return "✅ Колонка subscription добавлена в таблицу users"
     except Exception as e:
         return f"❌ Ошибка: {e}"
 
