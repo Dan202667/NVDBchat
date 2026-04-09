@@ -12,6 +12,28 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 import requests
 from pywebpush import webpush, WebPushException
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production')
+
+# Настройка базы данных
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///database.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Настройка Cloudinary
+cloudinary.config(
+    cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME', 'dhkol0drf'),
+    api_key=os.environ.get('CLOUDINARY_API_KEY', '816413685482328'),
+    api_secret=os.environ.get('CLOUDINARY_API_SECRET', 'xf42h1mQQKprlwl0dujXHUpX7Ow')
+)
+
+# VAPID ключи для уведомлений (замени на свои)
+VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
+VAPID_CLAIMS = {"sub": "mailto:nvdbchat@example.com"}
+
+db = SQLAlchemy(app)
+
 # ==================== РЕЖИМ ПРИОСТАНОВКИ ====================
 MAINTENANCE_MODE = True  # ← поменяй на False, когда захочешь включить мессенджер
 ADMIN_USERNAME = 'Dan'   # ← твой username, который может заходить
@@ -38,26 +60,6 @@ def check_development_status():
 @app.route('/paused')
 def paused():
     return render_template('paused.html')
-app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production')
-
-# Настройка базы данных
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///database.db')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Настройка Cloudinary
-cloudinary.config(
-    cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME', 'dhkol0drf'),
-    api_key=os.environ.get('CLOUDINARY_API_KEY', '816413685482328'),
-    api_secret=os.environ.get('CLOUDINARY_API_SECRET', 'xf42h1mQQKprlwl0dujXHUpX7Ow')
-)
-
-# VAPID ключи для уведомлений (замени на свои)
-VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
-VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
-VAPID_CLAIMS = {"sub": "mailto:nvdbchat@example.com"}
-
-db = SQLAlchemy(app)
 
 # ==================== МОДЕЛИ ====================
 class User(db.Model):
@@ -71,7 +73,7 @@ class User(db.Model):
     is_online = db.Column(db.Boolean, default=False)
     is_banned = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    subscription = db.Column(db.Text, nullable=True)  # Для Web Push уведомлений
+    subscription = db.Column(db.Text, nullable=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -122,7 +124,6 @@ class SystemSetting(db.Model):
 
 with app.app_context():
     db.create_all()
-    # Создаём настройки по умолчанию
     default_settings = [
         ('registration_enabled', 'true'),
         ('invite_only', 'false'),
@@ -788,159 +789,4 @@ def admin_user_ban(user_id):
 
 @app.route('/admin/user/reset_password/<int:user_id>', methods=['POST'])
 @admin_required
-def admin_user_reset_password(user_id):
-    user = User.query.get(user_id)
-    if user:
-        new_password = secrets.token_urlsafe(8)
-        user.set_password(new_password)
-        db.session.commit()
-        flash(f'Новый пароль для {user.name}: {new_password}', 'info')
-    return redirect(url_for('admin_users'))
-
-@app.route('/admin/user/delete/<int:user_id>', methods=['POST'])
-@admin_required
-def admin_user_delete(user_id):
-    user = User.query.get(user_id)
-    if user and user.username != 'Dan':
-        MessageReaction.query.filter_by(user_id=user_id).delete()
-        Message.query.filter_by(sender_id=user_id).delete()
-        ChatParticipant.query.filter_by(user_id=user_id).delete()
-        db.session.delete(user)
-        db.session.commit()
-        flash(f'Пользователь {user.name} удалён')
-    return redirect(url_for('admin_users'))
-
-@app.route('/admin/messages')
-@admin_required
-def admin_messages():
-    messages = Message.query.order_by(Message.timestamp.desc()).limit(200).all()
-    return render_template('admin_messages.html', messages=messages)
-
-@app.route('/admin/message/delete/<int:message_id>', methods=['POST'])
-@admin_required
-def admin_message_delete(message_id):
-    msg = Message.query.get(message_id)
-    if msg:
-        db.session.delete(msg)
-        db.session.commit()
-        flash('Сообщение удалено')
-    return redirect(url_for('admin_messages'))
-
-@app.route('/admin/chats')
-@admin_required
-def admin_chats():
-    chats = Chat.query.order_by(Chat.created_at.desc()).all()
-    return render_template('admin_chats.html', chats=chats)
-
-@app.route('/admin/chat/delete/<int:chat_id>', methods=['POST'])
-@admin_required
-def admin_chat_delete(chat_id):
-    chat = Chat.query.get(chat_id)
-    if chat:
-        db.session.delete(chat)
-        db.session.commit()
-        flash('Чат удалён')
-    return redirect(url_for('admin_chats'))
-
-@app.route('/admin/media')
-@admin_required
-def admin_media():
-    media_messages = Message.query.filter(Message.file_url.isnot(None)).order_by(Message.timestamp.desc()).limit(200).all()
-    return render_template('admin_media.html', media=media_messages)
-
-@app.route('/admin/settings')
-@admin_required
-def admin_settings():
-    settings = {
-        'registration_enabled': get_setting('registration_enabled', 'true') == 'true',
-        'invite_only': get_setting('invite_only', 'false') == 'true',
-        'invite_code': get_setting('invite_code', 'NVDB2026'),
-        'maintenance_mode': get_setting('maintenance_mode', 'false') == 'true',
-        'enable_voice': get_setting('enable_voice', 'true') == 'true',
-        'enable_media': get_setting('enable_media', 'true') == 'true',
-        'enable_groups': get_setting('enable_groups', 'true') == 'true',
-        'max_login_attempts': int(get_setting('max_login_attempts', '5')),
-        'max_file_size_mb': int(get_setting('max_file_size_mb', '10')),
-        'messages_per_minute': int(get_setting('messages_per_minute', '0')),
-        'auto_delete_days': int(get_setting('auto_delete_days', '0')),
-        'blacklist': get_setting('blacklist', '')
-    }
-    return render_template('admin_settings.html', settings=settings)
-
-@app.route('/admin/settings/update', methods=['POST'])
-@admin_required
-def admin_settings_update():
-    set_setting('registration_enabled', 'true' if request.form.get('registration_enabled') else 'false')
-    set_setting('invite_only', 'true' if request.form.get('invite_only') else 'false')
-    set_setting('invite_code', request.form.get('invite_code', 'NVDB2026'))
-    set_setting('maintenance_mode', 'true' if request.form.get('maintenance_mode') else 'false')
-    set_setting('enable_voice', 'true' if request.form.get('enable_voice') else 'false')
-    set_setting('enable_media', 'true' if request.form.get('enable_media') else 'false')
-    set_setting('enable_groups', 'true' if request.form.get('enable_groups') else 'false')
-    set_setting('max_login_attempts', request.form.get('max_login_attempts', '5'))
-    set_setting('max_file_size_mb', request.form.get('max_file_size_mb', '10'))
-    set_setting('messages_per_minute', request.form.get('messages_per_minute', '0'))
-    set_setting('auto_delete_days', request.form.get('auto_delete_days', '0'))
-    set_setting('blacklist', request.form.get('blacklist', ''))
-    
-    flash('Настройки сохранены')
-    return redirect(url_for('admin_settings'))
-
-@app.route('/admin/clear_cache', methods=['POST'])
-@admin_required
-def admin_clear_cache():
-    flash('Кеш очищен')
-    return jsonify({'message': 'Кеш очищен'})
-
-@app.route('/admin/backup_db')
-@admin_required
-def admin_backup_db():
-    output = StringIO()
-    writer = csv.writer(output)
-    writer.writerow(['id', 'name', 'username', 'avatar_url', 'created_at', 'is_banned', 'is_online'])
-    
-    for user in User.query.all():
-        writer.writerow([user.id, user.name, user.username, user.avatar_url, user.created_at, user.is_banned, user.is_online])
-    
-    response = Response(output.getvalue(), mimetype='text/csv')
-    response.headers.set('Content-Disposition', 'attachment', filename='nvdbchat_backup.csv')
-    return response
-
-# ==================== ВСПОМОГАТЕЛЬНЫЕ МАРШРУТЫ ====================
-@app.route('/fix_db_all')
-def fix_db_all():
-    from sqlalchemy import text
-    try:
-        with db.engine.connect() as conn:
-            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMP DEFAULT NULL"))
-            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_online BOOLEAN DEFAULT FALSE"))
-            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE"))
-            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_folders TEXT DEFAULT NULL"))
-            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription TEXT DEFAULT NULL"))
-            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to INTEGER DEFAULT NULL"))
-            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS pinned BOOLEAN DEFAULT FALSE"))
-            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMP DEFAULT NULL"))
-            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS delete_at TIMESTAMP DEFAULT NULL"))
-            conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS views INTEGER DEFAULT 0"))
-            conn.execute(text("ALTER TABLE chat_participants ADD COLUMN IF NOT EXISTS last_read_message_id INTEGER DEFAULT 0"))
-            conn.execute(text("ALTER TABLE chats ADD COLUMN IF NOT EXISTS folder VARCHAR(50) DEFAULT 'Основные'"))
-            conn.execute(text("ALTER TABLE chats ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(300) DEFAULT NULL"))
-            conn.commit()
-        return "✅ База данных обновлена. Все недостающие колонки добавлены."
-    except Exception as e:
-        return f"❌ Ошибка: {e}"
-
-@app.route('/fix_subscription')
-def fix_subscription():
-    from sqlalchemy import text
-    try:
-        with db.engine.connect() as conn:
-            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription TEXT DEFAULT NULL"))
-            conn.commit()
-        return "✅ Колонка subscription добавлена в таблицу users"
-    except Exception as e:
-        return f"❌ Ошибка: {e}"
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+def admin_user_reset_password
