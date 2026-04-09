@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block header %}
+<div class="app-header">
+    <h1>NVDBchat</h1>
+    <div>
+        {% if session.user_id %}
+            <span style="color:#8696a0; margin-right:15px;">{{ session.username }}</span>
+            <a href="{{ url_for('chats') }}">Чаты</a>
+            <a href="{{ url_for('profile') }}">Профиль</a>
+            <a href="{{ url_for('logout') }}">Выйти</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="paused-container">
+    <div class="paused-icon">🛠️</div>
+    <h1>Разработка приостановлена</h1>
+    <p>Мессенджер NVDBchat временно недоступен.</p>
+    <p>Ведутся технические работы и улучшение функционала.</p>
+    <p class="small">Приносим извинения за неудобства. Скоро всё заработает!</p>
+    <div class="progress-bar">
+        <div class="progress-fill" style="width: 65%;"></div>
+    </div>
+    <p class="progress-text">Прогресс разработки: ~65%</p>
+    <p class="contact">По вопросам: <a href="mailto:support@nvdbchat.com">support@nvdbchat.com</a></p>
+</div>
+
+<style>
+.paused-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 70vh;
+    text-align: center;
+    padding: 20px;
+}
+.paused-icon {
+    font-size: 4rem;
+    margin-bottom: 20px;
+}
+.paused-container h1 {
+    color: #00a884;
+    margin-bottom: 20px;
+}
+.paused-container p {
+    margin-bottom: 15px;
+    color: #e9edef;
+}
+.paused-container .small {
+    font-size: 0.85rem;
+    color: #8696a0;
+}
+.progress-bar {
+    width: 80%;
+    max-width: 300px;
+    height: 8px;
+    background: #2a3942;
+    border-radius: 4px;
+    margin: 30px 0 10px;
+    overflow: hidden;
+}
+.progress-fill {
+    height: 100%;
+    background: #00a884;
+    border-radius: 4px;
+}
+.progress-text {
+    font-size: 0.8rem;
+    color: #00a884;
+}
+.contact {
+    margin-top: 40px;
+    font-size: 0.8rem;
+}
+.contact a {
+    color: #00a884;
+    text-decoration: none;
+}
+</style>
+{% endblock %}

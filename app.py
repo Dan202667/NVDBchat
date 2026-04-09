@@ -12,7 +12,32 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 import requests
 from pywebpush import webpush, WebPushException
+# ==================== РЕЖИМ ПРИОСТАНОВКИ ====================
+MAINTENANCE_MODE = True  # ← поменяй на False, когда захочешь включить мессенджер
+ADMIN_USERNAME = 'Dan'   # ← твой username, который может заходить
 
+def is_development_paused():
+    return MAINTENANCE_MODE
+
+@app.before_request
+def check_development_status():
+    if not is_development_paused():
+        return None
+    
+    if 'user_id' in session:
+        user = User.query.get(session['user_id'])
+        if user and user.username == ADMIN_USERNAME:
+            return None
+    
+    allowed_paths = ['/paused', '/static/', '/logout']
+    if request.path.startswith(tuple(allowed_paths)):
+        return None
+    
+    return redirect(url_for('paused'))
+
+@app.route('/paused')
+def paused():
+    return render_template('paused.html')
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production')
 
