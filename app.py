@@ -789,4 +789,4 @@ def admin_user_ban(user_id):
 
 @app.route('/admin/user/reset_password/<int:user_id>', methods=['POST'])
 @admin_required
-def admin_user_reset_password
+def admin_user_reset_password():
